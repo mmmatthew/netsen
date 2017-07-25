@@ -36,7 +36,7 @@ class BaseDataProvider(object):
     """
     
     channels = 1
-    n_class = 2
+    n_class = 3
     
 
     def __init__(self, a_min=None, a_max=None):
@@ -57,6 +57,7 @@ class BaseDataProvider(object):
         return train_data.reshape(1, ny, nx, self.channels), labels.reshape(1, ny, nx, self.n_class),
     
     def _process_labels(self, label):
+        # not necessary with watsen mask formatting (the labels are already in the correct format)
         if self.n_class == 2:
             nx = label.shape[1]
             ny = label.shape[0]
@@ -145,7 +146,7 @@ class ImageDataProvider(BaseDataProvider):
     
     """
     
-    n_class = 2
+    n_class = 3
     
     def __init__(self, search_path, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif'):
         super(ImageDataProvider, self).__init__(a_min, a_max)
