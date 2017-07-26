@@ -35,8 +35,8 @@ class BaseDataProvider(object):
 
     """
     
-    channels = 1
-    n_class = 3
+    channels = 3
+    n_class = 2
     
 
     def __init__(self, a_min=None, a_max=None):
@@ -58,15 +58,14 @@ class BaseDataProvider(object):
     
     def _process_labels(self, label):
         # not necessary with watsen mask formatting (the labels are already in the correct format)
-        if self.n_class == 2:
-            nx = label.shape[1]
-            ny = label.shape[0]
-            labels = np.zeros((ny, nx, self.n_class), dtype=np.float32)
-            labels[..., 1] = label
-            labels[..., 0] = ~label
-            return labels
-        
-        return label
+        # if self.n_class == 2:
+        #     nx = label.shape[1]
+        #     ny = label.shape[0]
+        #     labels = np.zeros((ny, nx, self.n_class), dtype=np.float32)
+        #     labels[..., 1] = label
+        #     labels[..., 0] = ~label
+        #     return labels
+        return label[:, :, 1:]  # numpy reads rgb bands as bgr, so the order of classes is inverted we only return two of the three layers
     
     def _process_data(self, data):
         # normalization
@@ -146,7 +145,7 @@ class ImageDataProvider(BaseDataProvider):
     
     """
     
-    n_class = 3
+    n_class = 2
     
     def __init__(self, search_path, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif'):
         super(ImageDataProvider, self).__init__(a_min, a_max)
