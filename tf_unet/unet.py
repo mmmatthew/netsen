@@ -20,6 +20,7 @@ author: jakeret
 from __future__ import print_function, division, absolute_import, unicode_literals
 
 import os
+from datetime import datetime
 import shutil
 import numpy as np
 from collections import OrderedDict
@@ -29,6 +30,7 @@ import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
 from tf_unet import util
+from tf_unet import image_util
 from tf_unet.layers import (weight_variable, weight_variable_devonc, bias_variable,
                             conv2d, deconv2d, max_pool, crop_and_concat, pixel_wise_softmax_2,
                             cross_entropy)
@@ -279,6 +281,50 @@ class Unet(object):
             prediction = sess.run(self.predicter, feed_dict={self.x: x_test, self.y: y_dummy, self.keep_prob: 1.})
 
         return prediction
+
+    def predictAll(self, model_path, images_path):
+        """
+        Uses the model to create a prediction for all image files in folder
+        :param model_path: path to the model checkpoint to restore
+        :param images_path: where to find images
+        :param threshold: threshold to be used when estimating water coverage
+        :return: list of detections including time, measured value, and prediction
+        """
+        init = tf.global_variables_initializer()
+        dataProvider = image_util.ImageDataProvider(images_path=images_path)
+        imagecount = len(os.listdir(images_path))
+        data = {
+                    'sensor': [],
+                    'time': [],
+                    'watsen': {
+                        '0.6': [],
+                        '0.7': [],
+                        '0.8': [],
+                        '0.9': [],
+                    }
+                }
+        with tf.Session() as sess:
+            # Initialize variables
+            sess.run(init)
+
+            # Restore model weights from previously saved model
+            self.restore(sess, model_path)
+
+            # loop through files
+            for i in range(imagecount):
+                x, [y], [name] = dataProvider(1)
+
+                info = os.path.basename(name).split('_')
+                data['time'].append(datetime.strptime(info[0], '%y%m%d %H%M%S'))
+                data['sensor'].append(float(info[1].split('.')[0]) / 10)
+                y_dummy = np.empty((x.shape[0], x.shape[1], x.shape[2], self.n_class))
+                prediction = sess.run(self.predicter, feed_dict={self.x: x, self.y: y_dummy, self.keep_prob: 1.})
+
+                for thr in [0.6, 0.7, 0.8, 0.9]:
+                    data['watsen'][str(thr)].append(
+                        np.sum(prediction > thr)/(prediction.shape[1]*prediction.shape[0])
+                    )
+        return data
 
     def save(self, sess, model_path):
         """

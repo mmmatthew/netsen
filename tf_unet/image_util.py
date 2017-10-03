@@ -18,7 +18,10 @@ from __future__ import print_function, division, absolute_import, unicode_litera
 
 #import cv2
 import glob
+import os
+import random
 import numpy as np
+import pandas as pd
 from PIL import Image
 
 class BaseDataProvider(object):
@@ -44,7 +47,7 @@ class BaseDataProvider(object):
         self.a_max = a_max if a_min is not None else np.inf
 
     def _load_data_and_label(self):
-        data, label = self._next_data()
+        data, label, image_name = self._next_data()
             
         train_data = self._process_data(data)
         labels = self._process_labels(label)
@@ -54,7 +57,11 @@ class BaseDataProvider(object):
         nx = data.shape[1]
         ny = data.shape[0]
 
-        return train_data.reshape(1, ny, nx, self.channels), labels.reshape(1, ny, nx, self.n_class),
+        # reshape
+        train_data = train_data.reshape(1, ny, nx, self.channels)
+        if labels != '':
+            labels = labels.reshape(1, ny, nx, self.n_class)
+        return train_data, labels, image_name
     
     def _process_labels(self, label):
         # not necessary with watsen mask formatting (the labels are already in the correct format)
@@ -65,7 +72,10 @@ class BaseDataProvider(object):
         #     labels[..., 1] = label
         #     labels[..., 0] = ~label
         #     return labels
-        return label[:, :, 1:]  # numpy reads rgb bands as bgr, so the order of classes is inverted we only return two of the three layers
+        if label == '':
+            return label
+        else:
+            return label[:, :, 1:]  # numpy reads rgb bands as bgr, so the order of classes is inverted we only return two of the three layers
     
     def _process_data(self, data):
         # normalization
@@ -84,21 +94,30 @@ class BaseDataProvider(object):
         return data, labels
     
     def __call__(self, n):
-        train_data, labels = self._load_data_and_label()
+        train_data, labels, image_name = self._load_data_and_label()
         nx = train_data.shape[1]
         ny = train_data.shape[2]
-    
+
+        names = list(np.arange(n))
         X = np.zeros((n, nx, ny, self.channels))
-        Y = np.zeros((n, nx, ny, self.n_class))
+        if labels != '':
+            Y = np.zeros((n, nx, ny, self.n_class))
+        else:
+            Y = list(np.arange(n))
     
         X[0] = train_data
         Y[0] = labels
+        names[0] = image_name
         for i in range(1, n):
-            train_data, labels = self._load_data_and_label()
+            train_data, labels, image_name = self._load_data_and_label()
             X[i] = train_data
             Y[i] = labels
+            names[i] = image_name
     
-        return X, Y
+        return X, Y, names
+
+    def _next_data(self):
+        return [1], [1], 'test'
     
 class SimpleDataProvider(BaseDataProvider):
     """
@@ -147,25 +166,54 @@ class ImageDataProvider(BaseDataProvider):
     
     n_class = 2
     
-    def __init__(self, search_path, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif'):
+    def __init__(self, images_path, labels_path='', label_validity=10, randomize=False, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif'):
         super(ImageDataProvider, self).__init__(a_min, a_max)
         self.data_suffix = data_suffix
         self.mask_suffix = mask_suffix
+        self.label_validity = label_validity
         self.file_idx = -1
-        
-        self.data_files = self._find_data_files(search_path)
-    
+        self.haslabels = (labels_path is not '')
+
+        self.data_files = []
+
+        if not self.haslabels:
+            self.data_files = glob.glob(os.path.join(images_path, "*"+self.data_suffix))
+            self.label_files = []
+
+        else:
+            #find label files
+            self.label_files = glob.glob(os.path.join(labels_path, "*"+self.mask_suffix))
+            print(os.path.join(labels_path, "*"+self.mask_suffix))
+            print("Number label files found: %s" % len(self.label_files))
+
+            #find image files
+            self.data_files = self._find_data_files(images_path)
+
+        # randomize the files if needed
+        if randomize:
+            random.shuffle(self.data_files)
+
         assert len(self.data_files) > 0, "No training files"
         print("Number of files used: %s" % len(self.data_files))
         
         img = self._load_file(self.data_files[0])
         self.channels = 1 if len(img.shape) == 2 else img.shape[-1]
         
-    def _find_data_files(self, search_path):
-        all_files = glob.glob(search_path)
-        return [name for name in all_files if not self.mask_suffix in name]
+    def _find_data_files(self, images_path):
+        all_files = glob.glob(os.path.join(images_path, '*'+self.data_suffix))
+        return [f for f in all_files if self._getmatchinglabel(f)]
     
-    
+    def _getmatchinglabel(self, f):
+        filetime = pd.to_datetime(os.path.basename(f).split('_')[0], format='%y%m%d %H%M%S')
+        if not self.label_files == []:
+            for lf in self.label_files:
+                labeltime = pd.to_datetime(os.path.basename(lf).split('_')[0], format='%y%m%d %H%M%S')
+                # see if the timedelta is valid
+                if abs(labeltime-filetime) <= pd.to_timedelta(self.label_validity/2, 's'):
+                    return lf
+        else:
+            return ''
+
     def _load_file(self, path, dtype=np.float32):
         return np.array(Image.open(path), dtype)
         # return np.squeeze(cv2.imread(image_name, cv2.IMREAD_GRAYSCALE))
@@ -178,9 +226,12 @@ class ImageDataProvider(BaseDataProvider):
     def _next_data(self):
         self._cylce_file()
         image_name = self.data_files[self.file_idx]
-        label_name = image_name.replace(self.data_suffix, self.mask_suffix)
+        label_name = self._getmatchinglabel(image_name)
         
         img = self._load_file(image_name, np.float32)
-        label = self._load_file(label_name, np.bool)
+        if label_name != '':
+            label = self._load_file(label_name, np.bool)
+        else:
+            label = ''
     
-        return img,label
+        return img, label, image_name
