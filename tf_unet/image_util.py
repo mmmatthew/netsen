@@ -39,7 +39,7 @@ class BaseDataProvider(object):
     """
     
     channels = 3
-    n_class = 2
+    n_class = 3
     
 
     def __init__(self, a_min=None, a_max=None):
@@ -75,7 +75,7 @@ class BaseDataProvider(object):
         if label == '':
             return label
         else:
-            return label[:, :, 1:]  # numpy reads rgb bands as bgr, so the order of classes is inverted we only return two of the three layers
+            return label[:, :, :]  # numpy reads rgb bands as bgr, so the order of classes is inverted we return all three layers
     
     def _process_data(self, data):
         # normalization
@@ -133,7 +133,7 @@ class SimpleDataProvider(BaseDataProvider):
     
     """
     
-    def __init__(self, data, label, a_min=None, a_max=None, channels=1, n_class = 2):
+    def __init__(self, data, label, a_min=None, a_max=None, channels=1, n_class = 3):
         super(SimpleDataProvider, self).__init__(a_min, a_max)
         self.data = data
         self.label = label
@@ -164,7 +164,7 @@ class ImageDataProvider(BaseDataProvider):
     
     """
     
-    n_class = 2
+    n_class = 3
     
     def __init__(self, images_path, labels_path='', label_validity=10, randomize=False, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif'):
         super(ImageDataProvider, self).__init__(a_min, a_max)
@@ -189,9 +189,11 @@ class ImageDataProvider(BaseDataProvider):
             #find image files
             self.data_files = self._find_data_files(images_path)
 
-        # randomize the files if needed
+        # randomize the files if needed or sort them by filename
         if randomize:
             random.shuffle(self.data_files)
+        else:
+            self.data_files = sorted(self.data_files)
 
         assert len(self.data_files) > 0, "No training files"
         print("Number of files used: %s" % len(self.data_files))

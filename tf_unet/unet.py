@@ -182,7 +182,7 @@ class Unet(object):
     :param cost_kwargs: (optional) kwargs passed to the cost function. See Unet._get_cost for more options
     """
 
-    def __init__(self, channels=3, n_class=2, cost="cross_entropy", cost_kwargs={}, summaries=True, **kwargs):
+    def __init__(self, channels=3, n_class=3, cost="cross_entropy", cost_kwargs={}, summaries=True, **kwargs):
         tf.reset_default_graph()
 
         self.n_class = n_class
@@ -282,9 +282,11 @@ class Unet(object):
 
         return prediction
 
-    def predictAll(self, model_path, images_path):
+    def predictAll(self, model_path, images_path, count=None, thrs=[0.8, 0.9, 0.95, 0.97]):
         """
         Uses the model to create a prediction for all image files in folder
+        :param thrs: thresholds for which to compute fractions
+        :param count: how many of the images should be processed
         :param model_path: path to the model checkpoint to restore
         :param images_path: where to find images
         :param threshold: threshold to be used when estimating water coverage
@@ -292,17 +294,19 @@ class Unet(object):
         """
         init = tf.global_variables_initializer()
         dataProvider = image_util.ImageDataProvider(images_path=images_path)
-        imagecount = len(os.listdir(images_path))
+        if count is not None:
+            imagecount = count
+        else:
+            imagecount = len(os.listdir(images_path))
+
         data = {
                     'sensor': [],
                     'time': [],
-                    'watsen': {
-                        '0.6': [],
-                        '0.7': [],
-                        '0.8': [],
-                        '0.9': [],
-                    }
+                    'watsen': {}
                 }
+        for thr in thrs:
+            data['watsen'][str(thr)] = []
+
         with tf.Session() as sess:
             # Initialize variables
             sess.run(init)
@@ -318,11 +322,11 @@ class Unet(object):
                 data['time'].append(datetime.strptime(info[0], '%y%m%d %H%M%S'))
                 data['sensor'].append(float(info[1].split('.')[0]) / 10)
                 y_dummy = np.empty((x.shape[0], x.shape[1], x.shape[2], self.n_class))
-                prediction = sess.run(self.predicter, feed_dict={self.x: x, self.y: y_dummy, self.keep_prob: 1.})
+                prediction = sess.run(self.predicter, feed_dict={self.x: x, self.y: y_dummy, self.keep_prob: 1.})[..., 1] # the last index takes only band 2, which give flood water
 
-                for thr in [0.6, 0.7, 0.8, 0.9]:
+                for thr in thrs:
                     data['watsen'][str(thr)].append(
-                        np.sum(prediction > thr)/(prediction.shape[1]*prediction.shape[0])
+                        np.sum(prediction > 0.9, axis=(1, 2))/(prediction.shape[1]*prediction.shape[0])
                     )
         return data
 
@@ -469,7 +473,7 @@ class Trainer(object):
                 if ckpt and ckpt.model_checkpoint_path:
                     self.net.restore(sess, ckpt.model_checkpoint_path)
 
-            test_x, test_y = data_provider(self.verification_batch_size)
+            test_x, test_y, names = data_provider(self.verification_batch_size)
             pred_shape = self.store_prediction(sess, test_x, test_y, "_init")
 
             summary_writer = tf.summary.FileWriter(output_path, graph=sess.graph)
@@ -479,7 +483,7 @@ class Trainer(object):
             for epoch in range(epochs):
                 total_loss = 0
                 for step in range((epoch * training_iters), ((epoch + 1) * training_iters)):
-                    batch_x, batch_y = data_provider(self.batch_size)
+                    batch_x, batch_y, names = data_provider(self.batch_size)
 
                     # Run optimization op (backprop)
                     _, loss, lr, gradients = sess.run(
