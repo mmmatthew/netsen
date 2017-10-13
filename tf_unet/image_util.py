@@ -130,6 +130,8 @@ class SimpleDataProvider(BaseDataProvider):
     :param label: label numpy array. Shape=[n, X, Y, classes]
     :param a_min: (optional) min value used for clipping
     :param a_max: (optional) max value used for clipping
+    :param channels: (optional) number of channels, default=1
+    :param n_class: (optional) number of classes, default=2
     
     """
     
@@ -161,18 +163,22 @@ class ImageDataProvider(BaseDataProvider):
     :param a_max: (optional) max value used for clipping
     :param data_suffix: suffix pattern for the data images. Default '.tif'
     :param mask_suffix: suffix pattern for the label images. Default '_mask.tif'
+    :param channels: (optional) number of channels, default=1
+    :param n_class: (optional) number of classes, default=2
     
     """
+
     
-    n_class = 3
-    
-    def __init__(self, images_path, labels_path='', label_validity=10, randomize=False, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif'):
+    def __init__(self, images_path, labels_path='', label_validity=10, shuffle_data=False, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif', n_class=3, n_channels=3):
         super(ImageDataProvider, self).__init__(a_min, a_max)
         self.data_suffix = data_suffix
         self.mask_suffix = mask_suffix
         self.label_validity = label_validity
         self.file_idx = -1
         self.haslabels = (labels_path is not '')
+        self.shuffle_data = shuffle_data
+        self.n_class = n_class
+        self.n_channels = n_channels
 
         self.data_files = []
 
@@ -190,7 +196,7 @@ class ImageDataProvider(BaseDataProvider):
             self.data_files = self._find_data_files(images_path)
 
         # randomize the files if needed or sort them by filename
-        if randomize:
+        if self.shuffle_data:
             random.shuffle(self.data_files)
         else:
             self.data_files = sorted(self.data_files)

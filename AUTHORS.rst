@@ -5,7 +5,8 @@ Credits
 Development Lead
 ----------------
 
-* `@jakeret <https://github.com/jakeret>`_ 
+* `@mmmatthew <https://github.com/mmmatthew>`_
+* `@jakeret <https://github.com/jakeret>`_
 
 Contributors
 ------------
