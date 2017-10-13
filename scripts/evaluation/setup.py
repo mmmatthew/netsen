@@ -18,7 +18,7 @@ def run(directory):
     """
 
     :param directory: Folder in which project will be created. The project requires
-    :return: none
+    :return: full paths to each subdir
     """
     import os
     if not os.path.exists(directory):
@@ -27,4 +27,5 @@ def run(directory):
     for subdir in stages:
         if not os.path.exists(os.path.join(directory, subdir)):
             os.makedirs(os.path.join(directory, subdir))
-    return stages
+
+    return [os.path.join(directory, s) for s in stages]
