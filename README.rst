@@ -1,16 +1,7 @@
 =============================
-Tensorflow Unet
+WATSEN: Water Segmentation with Neural Networks
 =============================
 
-.. image:: https://readthedocs.org/projects/tf-unet/badge/?version=latest
-	:target: http://tf-unet.readthedocs.io/en/latest/?badge=latest
-	:alt: Documentation Status
-		
-.. image:: http://img.shields.io/badge/arXiv-1609.09077-orange.svg?style=flat
-        :target: http://arxiv.org/abs/1609.09077
-
-.. image:: https://img.shields.io/badge/ascl-1611.002-blue.svg?colorB=262255
-        :target: http://ascl.net/1611.002
 
 
 This is a generic **U-Net** implementation as proposed by `Ronneberger et al. <https://arxiv.org/pdf/1505.04597.pdf>`_ developed with **Tensorflow**. The code has been developed and used for `Radio Frequency Interference mitigation using deep convolutional neural networks <http://arxiv.org/abs/1609.09077>`_ .
