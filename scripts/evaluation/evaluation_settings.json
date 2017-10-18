@@ -1,0 +1,32 @@
+{
+  "frame_extraction_combinations":
+  [
+    [0],
+    [0, 0.1, 0.2],
+    [0, 0.2, 0.4],
+    [0, 0.5, 1],
+    [0, 1, 2],
+    [0, 5, 10],
+    [0, 0.1, 0.3],
+    [0, 0.2, 0.6],
+    [0, 0.5, 1.5],
+    [0, 0.2, 1.2]
+  ],
+  "frame_extraction_new_dim": [640, 360],
+  "select_sample_images":{
+    "training_events": {
+      "start": "",
+      "end": "",
+      "count": 100,
+      "frac_train": 60,
+      "frac_test": 20,
+      "frac_valid": 20
+    },
+    "validation_events":{
+      "start": "",
+      "end": "",
+      "count": 30
+    }
+
+  }
+}
