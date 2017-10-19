@@ -33,6 +33,8 @@ def process_video(videofilepath, timedeltas, new_dims, data_root, waterlevel_dat
     # Open video file
     vid_capture = cv2.VideoCapture(videofilepath)
 
+    multitime = os.path.split(data_root)[1]
+
     # Initialize time
     moment = video_start_time
     video_ms = 0  # the advancement through the video, in ms
@@ -42,9 +44,9 @@ def process_video(videofilepath, timedeltas, new_dims, data_root, waterlevel_dat
         #  First get mean water level
         if waterlevel_data is not None:
             level = waterlevel_data.loc[waterlevel_data['datetime'] == moment]['value'].mean()
-            name_image = moment.strftime('%y%m%d_%H%M%S_') + "{:.0f}".format(level) + '.tif'
+            name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S_') + "{:.0f}".format(level) + '.jpg'
         else:
-            name_image = moment.strftime('%y%m%d_%H%M%S') + '.tif'
+            name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S') + '.jpg'
 
         # save image
         image_path = os.path.join(data_root, name_image)

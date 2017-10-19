@@ -1,7 +1,7 @@
 {
   "frame_extraction_combinations":
   [
-    [0],
+    [0, 0, 0],
     [0, 0.1, 0.2],
     [0, 0.2, 0.4],
     [0, 0.5, 1],
@@ -14,17 +14,14 @@
   ],
   "frame_extraction_new_dim": [640, 360],
   "select_sample_images":{
-    "training_events": {
-      "start": "",
-      "end": "",
-      "count": 100,
-      "frac_train": 60,
-      "frac_test": 20,
-      "frac_valid": 20
+    "intra-event": {
+      "start": "161007_110000",
+      "end": "161007_121000",
+      "count": 100
     },
-    "validation_events":{
-      "start": "",
-      "end": "",
+    "inter-event":{
+      "start": "161007_121000",
+      "end": "161007_134830",
       "count": 30
     }
 
