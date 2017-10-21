@@ -46,7 +46,7 @@ def process_video(videofilepath, timedeltas, new_dims, data_root, waterlevel_dat
             level = waterlevel_data.loc[waterlevel_data['datetime'] == moment]['value'].mean()
             name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S_') + "{:.0f}".format(level) + '.jpg'
         else:
-            name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S') + '.jpg'
+            name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S_') + '.jpg'
 
         # save image
         image_path = os.path.join(data_root, name_image)

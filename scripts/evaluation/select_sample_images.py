@@ -42,7 +42,7 @@ def create(image_dir, output_dir, settings, image_pattern='*.jpg', prepend='', f
             # copy files
             for path in rand_selection:
                 shutil.copy(path, dest_path)
-    return labels_path
+    return images_path, labels_path
 
 def directory_struct(directory, force):
     subdirs = [

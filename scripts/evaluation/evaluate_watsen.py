@@ -1,32 +1,14 @@
-
-# coding: utf-8
-
-# # Evaluation of WATSEN
-# ## Some housekeeping
-# 
-
-# In[17]:
-
-# For reloading external modules
-# get_ipython().magic('load_ext autoreload')
-# get_ipython().magic('autoreload 2')
-
-
-# In[67]:
-
 import setup
 import fetch_videos
 import extract_frames
 import select_sample_images
+import image_datasets
 import json
 import os
 
 
 # ### Evaluation settings
 # The method is tested with video data from the floodX experiments.
-# 
-
-# In[68]:
 
 working_dir='E:/watson_eval'
 video_archive_url='https://zenodo.org/record/830451/files/s3_cam1_instar_161007A.tar'
@@ -37,33 +19,18 @@ camera_time_offset_url='https://zenodo.org/record/830451/files/temporal_offsets_
 with open('evaluation_settings.json') as json_data:
     settings = json.load(json_data)
 
-
 # ### Set up folder structure
-# 
-
-# In[20]:
-
 stages = setup.run(working_dir)
 
 
 # ## Fetch videos
-
-# In[21]:
-
 video_folder = fetch_videos.sync(stages[0], video_archive_url)
 
 
 # ## Extract video frames into multiframe images
-# 
-
-# In[54]:
-
 # Get water level and time offset data
 water_levels = extract_frames.load_water_level(water_level_data_url)
 time_offset = extract_frames.load_video_time_offsets(camera_time_offset_url)
-
-
-# In[66]:
 
 image_dirs = []
 for timedeltas in settings['frame_extraction_combinations']:
@@ -74,11 +41,13 @@ for timedeltas in settings['frame_extraction_combinations']:
         water_levels, time_offset)
     image_dirs.append(output_dir)
 
-
 # ## Select samples randomly
-# 
+images_path, labels_path = select_sample_images.create(image_dir=image_dirs[3], output_dir=stages[2], settings=settings)
 
-# In[78]:
+# ## create datasets
+image_datasets.create(
+    label_dir=labels_path['intra-event'],
+    image_dir=images_path['intra-event'],
+    output_dir=stages[3],
 
-select_sample_images.create(image_dir=image_dirs[3], output_dir=stages[2], settings=settings)
-
+)
