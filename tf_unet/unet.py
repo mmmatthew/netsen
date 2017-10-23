@@ -417,7 +417,8 @@ class Trainer(object):
         self.summary_op = tf.summary.merge_all()
         init = tf.global_variables_initializer()
 
-        prediction_path = os.path.abspath(self.prediction_path)
+        self.prediction_path = os.path.join(output_path, self.prediction_path)
+        prediction_path = self.prediction_path
         output_path = os.path.abspath(output_path)
 
         if not restore:

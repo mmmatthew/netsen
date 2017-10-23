@@ -51,6 +51,8 @@ def create(label_dir, image_dir, output_dir, name, augment=False, augment_durati
     csv_file = os.path.join(output_dir, name + '.csv')
     images_and_labels.to_csv(csv_file)
 
+    return csv_file
+
     # Copy images to directories
     # if not os.path.exists(os.path.join(output_dir, name)):
     #     os.makedirs(os.path.join(output_dir, name))

@@ -6,9 +6,10 @@ import pandas
 import glob
 import random
 import shutil
+import evaluation_settings as s
 
 
-def create(image_dir, output_dir, settings, image_pattern='*.jpg', prepend='', force=False):
+def create(image_dir, output_dir, image_pattern='*.jpg', prepend='', force=False):
     # set up structure
     images_path, labels_path = directory_struct(output_dir, force)
 
@@ -30,10 +31,10 @@ def create(image_dir, output_dir, settings, image_pattern='*.jpg', prepend='', f
                         print(e)
             filtered_list = filter_by_date(
                 image_list,
-                settings['select_sample_images'][key]['start'],
-                settings['select_sample_images'][key]['end'])
+                s.select_sample_images[key]['start'],
+                s.select_sample_images[key]['end'])
 
-            rand_selection = random.sample(filtered_list, settings['select_sample_images'][key]['count'])
+            rand_selection = random.sample(filtered_list, s.select_sample_images[key]['count'])
 
             # write to file
             with open(os.path.join(output_dir, key+'.txt'), 'w') as file:
