@@ -6,11 +6,10 @@ Options: natural data augmentation, train/test/validation fractions, reduction i
 import pandas
 import os
 from glob import glob
-import shutil
 
 
 def create(label_dir, image_dir, output_dir, name, augment=False, augment_duration=0,
-           frac_train=0.7, frac_test=0.2, frac_validate=0.1, reduce_train=0.0,
+           frac_train=0.7, frac_test=0.3, frac_validate=0.0, reduce_train=0.0,
            label_pattern='*.png', image_ext='.jpg'):
 
     # fetch list of label images
@@ -34,7 +33,7 @@ def create(label_dir, image_dir, output_dir, name, augment=False, augment_durati
         return
 
     # mix order of rows
-    images_and_labels = images_and_labels.sample(frac=1).reset_index(drop=True)
+    images_and_labels = images_and_labels.sample(frac=1, random_state=1).reset_index(drop=True)
 
     # determine numbers of train, test, and validation
     sample_counts = {
@@ -49,9 +48,8 @@ def create(label_dir, image_dir, output_dir, name, augment=False, augment_durati
         counter = counter + sample_counts[role]
 
     # Write to csv file
-    images_and_labels.to_csv(
-        os.path.join(output_dir, name + '.csv')
-    )
+    csv_file = os.path.join(output_dir, name + '.csv')
+    images_and_labels.to_csv(csv_file)
 
     # Copy images to directories
     # if not os.path.exists(os.path.join(output_dir, name)):

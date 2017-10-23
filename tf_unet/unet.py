@@ -220,7 +220,7 @@ class Unet(object):
         flat_logits = tf.reshape(logits, [-1, self.n_class])
         flat_labels = tf.reshape(self.y, [-1, self.n_class])
         # create label mask to remove all information from logits where there are no labels
-        flat_mask = tf.reduce_sum(flat_labels, axis=1)
+        # flat_mask = tf.reduce_sum(flat_labels, axis=1)
 
         if cost_name == "cross_entropy":
             class_weights = cost_kwargs.pop("class_weights", None)
@@ -233,16 +233,16 @@ class Unet(object):
 
                 loss_map = tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits,
                                                                    labels=flat_labels)
-                weighted_loss = tf.multiply(flat_mask, tf.multiply(loss_map, weight_map))
-                # weighted_loss = tf.multiply(loss_map, weight_map)
+                # weighted_loss = tf.multiply(flat_mask, tf.multiply(loss_map, weight_map))
+                weighted_loss = tf.multiply(loss_map, weight_map)
 
                 loss = tf.reduce_mean(weighted_loss)
 
             else:
-                # loss = tf.reduce_mean( tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits,
-                #                                                                          labels=flat_labels))
-                loss = tf.reduce_mean(tf.multiply(flat_mask, tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits,
-                                                                                                     labels=flat_labels)))
+                loss = tf.reduce_mean( tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits,
+                                                                                         labels=flat_labels))
+                # loss = tf.reduce_mean(tf.multiply(flat_mask, tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits,
+                #                                                                                      labels=flat_labels)))
         elif cost_name == "dice_coefficient":
             eps = 1e-5
             prediction = pixel_wise_softmax_2(logits)

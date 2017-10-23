@@ -59,23 +59,14 @@ class BaseDataProvider(object):
 
         # reshape
         train_data = train_data.reshape(1, ny, nx, self.channels)
-        if labels != '':
-            labels = labels.reshape(1, ny, nx, self.n_class)
+        labels = labels.reshape(1, ny, nx, self.n_class)
         return train_data, labels, image_name
     
     def _process_labels(self, label):
-        # not necessary with watsen mask formatting (the labels are already in the correct format)
-        # if self.n_class == 2:
-        #     nx = label.shape[1]
-        #     ny = label.shape[0]
-        #     labels = np.zeros((ny, nx, self.n_class), dtype=np.float32)
-        #     labels[..., 1] = label
-        #     labels[..., 0] = ~label
-        #     return labels
-        if label == '':
-            return label
-        else:
-            return label[:, :, :]  # numpy reads rgb bands as bgr, so the order of classes is inverted we return all three layers
+        # encode label as one-hot
+        one_hot = (np.arange(self.n_class) == label[:, :, None]).astype(int)
+
+        return np.squeeze(one_hot)
     
     def _process_data(self, data):
         # normalization
@@ -100,10 +91,7 @@ class BaseDataProvider(object):
 
         names = list(np.arange(n))
         X = np.zeros((n, nx, ny, self.channels))
-        if labels != '':
-            Y = np.zeros((n, nx, ny, self.n_class))
-        else:
-            Y = list(np.arange(n))
+        Y = np.zeros((n, nx, ny, self.n_class))
     
         X[0] = train_data
         Y[0] = labels
@@ -157,70 +145,38 @@ class ImageDataProvider(BaseDataProvider):
 
     Usage:
     data_provider = ImageDataProvider("..fishes/train/*.tif")
-        
-    :param search_path: a glob search pattern to find all data and label images
+
     :param a_min: (optional) min value used for clipping
     :param a_max: (optional) max value used for clipping
-    :param data_suffix: suffix pattern for the data images. Default '.tif'
-    :param mask_suffix: suffix pattern for the label images. Default '_mask.tif'
-    :param channels: (optional) number of channels, default=1
     :param n_class: (optional) number of classes, default=2
     
     """
 
-    
-    def __init__(self, images_path, labels_path='', label_validity=10, shuffle_data=False, a_min=None, a_max=None, data_suffix=".tif", mask_suffix='_mask.tif', n_class=3, n_channels=3):
+    def __init__(self, dataset, roles=['train'], shuffle_data=False, a_min=None, a_max=None, n_class=3, n_channels=3):
         super(ImageDataProvider, self).__init__(a_min, a_max)
-        self.data_suffix = data_suffix
-        self.mask_suffix = mask_suffix
-        self.label_validity = label_validity
+
         self.file_idx = -1
-        self.haslabels = (labels_path is not '')
         self.shuffle_data = shuffle_data
         self.n_class = n_class
         self.n_channels = n_channels
 
-        self.data_files = []
+        # get data paths
+        self.data = pd.read_csv(dataset)
 
-        if not self.haslabels:
-            self.data_files = glob.glob(os.path.join(images_path, "*"+self.data_suffix))
-            self.label_files = []
-
-        else:
-            #find label files
-            self.label_files = glob.glob(os.path.join(labels_path, "*"+self.mask_suffix))
-            print(os.path.join(labels_path, "*"+self.mask_suffix))
-            print("Number label files found: %s" % len(self.label_files))
-
-            #find image files
-            self.data_files = self._find_data_files(images_path)
+        # extract data for current roles
+        self.data = self.data.loc[self.data['role'].isin(roles), :]
 
         # randomize the files if needed or sort them by filename
         if self.shuffle_data:
-            random.shuffle(self.data_files)
+            self.data = self.data.sample(frac=1).reset_index(drop=True)
         else:
-            self.data_files = sorted(self.data_files)
+            self.data.sort_values(by='time')
 
-        assert len(self.data_files) > 0, "No training files"
-        print("Number of files used: %s" % len(self.data_files))
-        
-        img = self._load_file(self.data_files[0])
+        assert len(self.data.index) > 0, "No training files"
+        print("Number of files used: %s" % len(self.data.index))
+
+        img = self._load_file(self.data.loc[0, 'image_path'])
         self.channels = 1 if len(img.shape) == 2 else img.shape[-1]
-        
-    def _find_data_files(self, images_path):
-        all_files = glob.glob(os.path.join(images_path, '*'+self.data_suffix))
-        return [f for f in all_files if self._getmatchinglabel(f)]
-    
-    def _getmatchinglabel(self, f):
-        filetime = pd.to_datetime(os.path.basename(f).split('_')[0], format='%y%m%d %H%M%S')
-        if not self.label_files == []:
-            for lf in self.label_files:
-                labeltime = pd.to_datetime(os.path.basename(lf).split('_')[0], format='%y%m%d %H%M%S')
-                # see if the timedelta is valid
-                if abs(labeltime-filetime) <= pd.to_timedelta(self.label_validity/2, 's'):
-                    return lf
-        else:
-            return ''
 
     def _load_file(self, path, dtype=np.float32):
         return np.array(Image.open(path), dtype)
@@ -228,18 +184,100 @@ class ImageDataProvider(BaseDataProvider):
 
     def _cylce_file(self):
         self.file_idx += 1
-        if self.file_idx >= len(self.data_files):
-            self.file_idx = 0 
+        if self.file_idx >= len(self.data.index):
+            self.file_idx = 0
+            # reshuffle data
+            self.data = self.data.sample(frac=1).reset_index(drop=True)
         
     def _next_data(self):
         self._cylce_file()
-        image_name = self.data_files[self.file_idx]
-        label_name = self._getmatchinglabel(image_name)
-        
-        img = self._load_file(image_name, np.float32)
-        if label_name != '':
-            label = self._load_file(label_name, np.bool)
-        else:
-            label = ''
+        image_path, label_path = self.data.loc[self.file_idx, ['image_path', 'label_path']]
+
+        image = self._load_file(image_path, np.float32)
+        label = self._load_file(label_path, np.int8)
     
-        return img, label, image_name
+        return image, label, os.path.basename(image_path)
+
+
+class ImageDataNoLabelProvider(BaseDataProvider):
+    """
+    Generic data provider for images without labels
+
+    Usage:
+    data_provider = ImageDataProvider("..fishes/train/*.tif")
+
+    :param a_min: (optional) min value used for clipping
+    :param a_max: (optional) max value used for clipping
+    :param n_class: (optional) number of classes, default=2
+
+    """
+
+    def __init__(self, directory, pattern='*.jpg', shuffle_data=False, a_min=None, a_max=None, n_channels=3):
+        super(ImageDataProvider, self).__init__(a_min, a_max)
+
+        self.file_idx = -1
+        self.shuffle_data = shuffle_data
+        self.n_channels = n_channels
+
+        # get data paths
+        self.data = glob.glob(os.path.join(directory, pattern))
+
+        # randomize the files if needed or sort them by filename
+        if self.shuffle_data:
+            self.data = random.shuffle(self.data)
+        else:
+            self.data.sort()
+
+        assert len(self.data) > 0, "No training files"
+        print("Number of files used: %s" % len(self.data))
+
+        img = self._load_file(self.data[0])
+        self.channels = 1 if len(img.shape) == 2 else img.shape[-1]
+
+    def __call__(self, n):
+        train_data, image_name = self._load_data()
+        nx = train_data.shape[1]
+        ny = train_data.shape[2]
+
+        names = list(np.arange(n))
+        X = np.zeros((n, nx, ny, self.channels))
+
+        X[0] = train_data
+        names[0] = image_name
+        for i in range(1, n):
+            train_data, image_name = self._load_data()
+            X[i] = train_data
+            names[i] = image_name
+
+        return X, names
+
+    def _load_data(self):
+        data, image_name = self._next_data()
+
+        train_data = self._process_data(data)
+
+        nx = data.shape[1]
+        ny = data.shape[0]
+
+        # reshape
+        train_data = train_data.reshape(1, ny, nx, self.channels)
+        return train_data, image_name
+
+    def _load_file(self, path, dtype=np.float32):
+        return np.array(Image.open(path), dtype)
+        # return np.squeeze(cv2.imread(image_name, cv2.IMREAD_GRAYSCALE))
+
+    def _cylce_file(self):
+        self.file_idx += 1
+        if self.file_idx >= len(self.data):
+            self.file_idx = 0
+            # reshuffle data
+            self.data = random.shuffle(self.data)
+
+    def _next_data(self):
+        self._cylce_file()
+        image_path = self.data[self.file_idx]
+
+        image = self._load_file(image_path, np.float32)
+
+        return image, os.path.basename(image_path)
