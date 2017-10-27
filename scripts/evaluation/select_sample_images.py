@@ -4,67 +4,104 @@ These functions extract sample images randomly from predefined periods to be lab
 import os
 import pandas
 import glob
-import random
 import shutil
 import evaluation_settings as s
+import random
+import numpy as np
+
+random.seed(1)
 
 
-def create(image_dir, output_dir, image_pattern='*.jpg', prepend='', force=False):
+def create_all(working_dir):
+    """
+    Goes through working dir and selects frames to sample images from to be labeled.
+    :param working_dir: Where to look for directories of extracted frames
+    :return: None.
+    """
+    for key, sample_settings in s.select_sample_images.items():
+        for cam in sample_settings['cameras']:
+            # todo: get a image folder for the given camera
+            image_folders = glob.glob(os.path.join(working_dir, s.stages[1], cam + '*'))
+            if len(image_folders) > 0:
+                # take images from the first folder for sampling. All other folder should have equivalent files.
+                create(image_dir=image_folders[0], output_dir=os.path.join(working_dir, s.stages[2]), camera=cam, sample_settings=sample_settings)
+            else:
+                print('No images found for ', cam)
+
+
+def get_weights(file_list, weight_flooded, threshold=5):
+    if weight_flooded == 1:
+        return None
+    else:
+        w = [weight_flooded if float(os.path.splitext(f)[0].split('_')[-1]) > threshold else 1 for f in file_list]
+        s = sum(w)
+        return [e/s for e in w]
+
+
+def create(image_dir, output_dir, camera, sample_settings, image_pattern='*.jpg', force=False):
+    """
+    Selects frames randomly for labelling
+    :param image_dir: Where the frames are located.
+    :param output_dir: Where the selection should be saved to.
+    :param camera: Camera name, for naming new directory
+    :param sample_settings: Settings for random sampling
+    :param image_pattern: Regular expression for finding frames in image_dir
+    :param force: Whether samples should be re-generated even if they already exist.
+    :return: Path to images and labels
+    """
     # set up structure
-    images_path, labels_path = directory_struct(output_dir, force)
+    dir_name = camera + '_' + sample_settings['name']
+    images_path, labels_path = directory_struct(output_dir, dir_name, force)
 
     image_list = glob.glob(os.path.join(image_dir, image_pattern))
 
-    for key, dest_path in images_path.items():
+    # check if there are already files in the folders
+    if len(os.listdir(images_path)) > 0 and not force:
+        print(dir_name + ' already exists. use force=True to overwrite')
+    else:
+        if force:
+            # delete existing files
+            for the_file in os.listdir(images_path):
+                file_path = os.path.join(images_path, the_file)
+                try:
+                    if os.path.isfile(file_path):
+                        os.unlink(file_path)
+                except Exception as e:
+                    print(e)
 
-        # check if there are already files in the folders
-        if len(os.listdir(dest_path)) > 0 and not force:
-            print(key + ' already exists. use force=True to overwrite')
-        else:
-            if force:
-                for the_file in os.listdir(dest_path):
-                    file_path = os.path.join(dest_path, the_file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.unlink(file_path)
-                    except Exception as e:
-                        print(e)
-            filtered_list = filter_by_date(
-                image_list,
-                s.select_sample_images[key]['start'],
-                s.select_sample_images[key]['end'])
+        # only select images within date
+        filtered_list = filter_by_date(
+            image_list,
+            sample_settings['start'],
+            sample_settings['end'])
 
-            rand_selection = random.sample(filtered_list, s.select_sample_images[key]['count'])
+        weights = get_weights(filtered_list, sample_settings['encourage_flooded'])
 
-            # write to file
-            with open(os.path.join(output_dir, key+'.txt'), 'w') as file:
-                file.writelines(["%s\n" % item for item in rand_selection])
+        rand_selection = np.random.choice(a=filtered_list, size=sample_settings['count'], p=weights)
 
-            # copy files
-            for path in rand_selection:
-                shutil.copy(path, dest_path)
+        # write to file
+        # with open(os.path.join(output_dir, dir_name+'.txt'), 'w') as file:
+        #     file.writelines(["%s\n" % item for item in rand_selection])
+
+        # copy files
+        for path in rand_selection:
+            shutil.copy(path, images_path)
     return images_path, labels_path
 
-def directory_struct(directory, force):
+def directory_struct(directory, name, force):
+
     subdirs = [
-        'intra-event',
-        'inter-event'
-    ]
-    subsubdirs = [
         'images',
         'labels'
     ]
-    images_path = {}
-    labels_path = {}
-    for subdir in subdirs:
-        if not os.path.exists(os.path.join(directory, subdir)):
-            os.makedirs(os.path.join(directory, subdir))
+    if not os.path.exists(os.path.join(directory, name)):
+        os.makedirs(os.path.join(directory, name))
 
-        for ssdir in subsubdirs:
-            if not os.path.exists(os.path.join(directory, subdir, ssdir)):
-                os.makedirs(os.path.join(directory, subdir, ssdir))
-        images_path[subdir] = os.path.join(directory, subdir, 'images')
-        labels_path[subdir] = os.path.join(directory, subdir, 'labels')
+    for dir in subdirs:
+        if not os.path.exists(os.path.join(directory, name, dir)):
+            os.makedirs(os.path.join(directory, name, dir))
+    images_path = os.path.join(directory, name, 'images')
+    labels_path = os.path.join(directory, name, 'labels')
     return images_path, labels_path
 
 

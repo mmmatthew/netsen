@@ -23,6 +23,7 @@ import os
 from datetime import datetime
 import shutil
 import numpy as np
+from PIL import Image
 from collections import OrderedDict
 import logging
 
@@ -282,30 +283,18 @@ class Unet(object):
 
         return prediction
 
-    def predictAll(self, model_path, images_path, count=None, thrs=[0.8, 0.9, 0.95, 0.97]):
+    def predictAll(self, model_path, dataset_path, output_dir, roles=['test']):
         """
-        Uses the model to create a prediction for all image files in folder
-        :param thrs: thresholds for which to compute fractions
-        :param count: how many of the images should be processed
+        Uses the model to create a prediction for all image files in dataset
+        :param roles: which images of the dataset should be used
+        :param dataset_path: dataset containing image paths
+        :param output_directory: where predictions should be saved
         :param model_path: path to the model checkpoint to restore
-        :param images_path: where to find images
-        :param threshold: threshold to be used when estimating water coverage
-        :return: list of detections including time, measured value, and prediction
         """
         init = tf.global_variables_initializer()
-        dataProvider = image_util.ImageDataProvider(images_path=images_path)
-        if count is not None:
-            imagecount = count
-        else:
-            imagecount = len(os.listdir(images_path))
+        dataProvider = image_util.ImageDataProvider(dataset_path=dataset_path, roles=roles)
 
-        data = {
-                    'sensor': [],
-                    'time': [],
-                    'watsen': {}
-                }
-        for thr in thrs:
-            data['watsen'][str(thr)] = []
+        imagecount = dataProvider.data_length
 
         with tf.Session() as sess:
             # Initialize variables
@@ -318,17 +307,41 @@ class Unet(object):
             for i in range(imagecount):
                 x, [y], [name] = dataProvider(1)
 
-                info = os.path.basename(name).split('_')
-                data['time'].append(datetime.strptime(info[0], '%y%m%d %H%M%S'))
-                data['sensor'].append(float(info[1].split('.')[0]) / 10)
+                # info = os.path.basename(name).split('_')
+                # data['time'].append(datetime.strptime(info[0], '%y%m%d %H%M%S'))
+                # data['sensor'].append(float(info[1].split('.')[0]) / 10)
                 y_dummy = np.empty((x.shape[0], x.shape[1], x.shape[2], self.n_class))
-                prediction = sess.run(self.predicter, feed_dict={self.x: x, self.y: y_dummy, self.keep_prob: 1.})[..., 1] # the last index takes only band 2, which give flood water
+                prediction = sess.run(self.predicter, feed_dict={self.x: x, self.y: y_dummy, self.keep_prob: 1.})[0]
 
-                for thr in thrs:
-                    data['watsen'][str(thr)].append(
-                        np.sum(prediction > 0.9, axis=(1, 2))/(prediction.shape[1]*prediction.shape[0])
-                    )
-        return data
+                img = Image.fromarray((prediction*200).astype(np.uint8))
+                img.save(os.path.join(output_dir, os.path.splitext(name)[0]+'.png'))
+
+                # for thr in thrs:
+                #     data['watsen'][str(thr)].append(
+                #         np.sum(prediction > 0.9, axis=(1, 2))/(prediction.shape[1]*prediction.shape[0])
+                #     )
+        return
+
+    def predict_no_label(self, model_path, images_dir, output_dir):
+        init = tf.global_variables_initializer()
+
+        with tf.Session() as sess:
+            # Initialize variables
+            sess.run(init)
+
+            # Restore model weights from previously saved model
+            self.restore(sess, model_path)
+
+            # loop through files
+            for image in os.listdir(images_dir):
+                x = image_util.load_image(os.path.join(images_dir, image))
+                y_dummy = np.empty((x.shape[0], x.shape[1], x.shape[2], self.n_class))
+                prediction = sess.run(self.predicter, feed_dict={self.x: [x], self.y: y_dummy, self.keep_prob: 1.})[0]
+
+                img = Image.fromarray((prediction * 200).astype(np.uint8))
+                img.save(os.path.join(output_dir, os.path.splitext(image)[0] + '.png'))
+
+        return
 
     def save(self, sess, model_path):
         """

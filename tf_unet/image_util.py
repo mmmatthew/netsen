@@ -152,7 +152,7 @@ class ImageDataProvider(BaseDataProvider):
     
     """
 
-    def __init__(self, dataset, roles=['train'], shuffle_data=False, a_min=None, a_max=None, n_class=3, n_channels=3):
+    def __init__(self, dataset_path, roles=['train'], shuffle_data=False, a_min=None, a_max=None, n_class=3, n_channels=3):
         super(ImageDataProvider, self).__init__(a_min, a_max)
 
         self.file_idx = -1
@@ -161,11 +161,14 @@ class ImageDataProvider(BaseDataProvider):
         self.n_channels = n_channels
 
         # get data paths
-        self.data = pd.read_csv(dataset)
+        self.data = pd.read_csv(dataset_path)
+
+        self.data_length = len(self.data)
 
         # extract data for current roles
         self.data = self.data.loc[self.data['role'].isin(roles), :]
-
+        # reset indexes
+        self.data = self.data.reset_index()
         # randomize the files if needed or sort them by filename
         if self.shuffle_data:
             self.data = self.data.sample(frac=1).reset_index(drop=True)
@@ -281,3 +284,12 @@ class ImageDataNoLabelProvider(BaseDataProvider):
         image = self._load_file(image_path, np.float32)
 
         return image, os.path.basename(image_path)
+
+
+def load_image(path, dtype=np.float32):
+    data = np.array(Image.open(path), dtype)
+    # normalization
+    data -= np.amin(data)
+    data /= np.amax(data)
+    return data
+

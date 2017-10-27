@@ -7,24 +7,45 @@ import cv2
 import os
 import datetime
 import glob
-import numpy as np
+import evaluation_settings as s
 
 
-def extract_from_all(video_dir, output_dir, timedeltas, new_dims, waterlevel_data, offsets, force=False):
-    # Check that output dir exists
-    if os.path.exists(output_dir) and not force:
-        return
-    elif not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+def extract_from_all(video_dir, output_dir, new_dims, sensor_data_url, offsets, force=False):
 
-    # Process all videos downloaded
-    for videofile in glob.glob(os.path.join(video_dir, '*.avi')):
-        process_video(videofile, timedeltas, new_dims, output_dir, waterlevel_data, offsets, step_s=1)
+    # Get sensor data
+    sensor_data = load_sensor_data(sensor_data_url)
+
+    # Depending on the camera, we either do many or few combinations
+    if 'cam1' in video_dir:
+        # use all combinations
+        combinations = s.frame_extraction_combinations_large
+    else:
+        combinations = s.frame_extraction_combinations_small
+
+    # Extracts frames from all videos for a given camera, for all different timedeltas
+    for timedeltas in combinations:
+        # create multitime string
+        multitime = '_'.join(str(x) for x in timedeltas)
+        # get camera from directory
+        camera = os.path.basename(video_dir).split('_')[1]
+        # subdir for saving the frames
+        output_subdir = os.path.join(output_dir, camera + '_' + multitime)
+
+        # Check that output dir exists and skip if so
+        if os.path.exists(output_subdir) and not force:
+            continue
+        elif not os.path.exists(output_subdir):
+            os.makedirs(output_subdir)
+        # Process all videos downloaded
+        for videofile in glob.glob(os.path.join(video_dir, '*.avi')):
+            process_video(videofile, timedeltas, new_dims, output_subdir, sensor_data, offsets, step_s=1, force=force)
 
 
-def process_video(videofilepath, timedeltas, new_dims, data_root, waterlevel_data=None, offsets=None, step_s=1):
+def process_video(videofilepath, timedeltas, new_dims, output_subdir, sensor_data=None, offsets=None, step_s=1, force=False):
+    # create multitime string
+    multitime = '_'.join(str(x) for x in timedeltas)
+
     # goes through video and saves a frame every step_s seconds.
-
     time_step = datetime.timedelta(seconds=step_s)
 
     # Get video metadata
@@ -33,23 +54,19 @@ def process_video(videofilepath, timedeltas, new_dims, data_root, waterlevel_dat
     # Open video file
     vid_capture = cv2.VideoCapture(videofilepath)
 
-    multitime = os.path.split(data_root)[1]
-
     # Initialize time
     moment = video_start_time
     video_ms = 0  # the advancement through the video, in ms
 
     # loop through time steps
     while moment < video_end_time:
-        #  First get mean water level
-        if waterlevel_data is not None:
-            level = waterlevel_data.loc[waterlevel_data['datetime'] == moment]['value'].mean()
-            name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S_') + "{:.0f}".format(level) + '.jpg'
-        else:
-            name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S_') + '.jpg'
+
+        level = int(sensor_data.loc[moment]['value'])
+        name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S_') + "{:.0f}".format(level) + '.jpg'
+
 
         # save image
-        image_path = os.path.join(data_root, name_image)
+        image_path = os.path.join(output_subdir, name_image)
         save_frame(path=image_path, vidcap=vid_capture, vid_time_ms=video_ms, delays=timedeltas, new_dims=new_dims)
 
         # increment time
@@ -57,11 +74,19 @@ def process_video(videofilepath, timedeltas, new_dims, data_root, waterlevel_dat
         moment = moment + time_step
 
 
-def load_water_level(url, sep=';'):
-    # Read the water level data from the file
+def load_sensor_data(url, sep=';'):
+    # Read the water level data from the file, resampled to a second frequency
+
     waterlevel_data = pandas.read_csv(url, sep=sep, parse_dates=[0], infer_datetime_format=True,
-                                      dayfirst=True)
-    return waterlevel_data
+                                      dayfirst=True, index_col=0)
+    # Resample to second frequency
+    if any(waterlevel_data.index.duplicated()):
+        # this is fast data: downsample
+        resampled = waterlevel_data.resample('S').mean()
+    else:
+        upsampled = waterlevel_data.resample('S')
+        resampled = upsampled.interpolate(method='linear')
+    return resampled
 
 
 def load_video_time_offsets(url, sep='\t'):
@@ -93,8 +118,10 @@ def save_frame(path, vidcap, vid_time_ms, delays, new_dims):
     image = cv2.merge(tuple(channels))
 
     # downscale image
-    image_scaled = cv2.resize(image, new_dims, interpolation=cv2.INTER_CUBIC)
-
+    try:
+        image_scaled = cv2.resize(image, new_dims, interpolation=cv2.INTER_CUBIC)
+    except TypeError:
+        print('something happened')
     # Save to file
     filename = path
     cv2.imwrite(filename, image_scaled)
@@ -111,6 +138,8 @@ def get_video_metadata(video_filepath, offsets=None):
         if offset[0] == '-':
             isnegative = True
             offset = offset[1:]
+        else:
+            isnegative = False
         t = datetime.datetime.strptime(offset, "%H:%M:%S")
         timedelta = datetime.timedelta(hours=t.hour, minutes=t.minute, seconds=t.second)
         if isnegative:
