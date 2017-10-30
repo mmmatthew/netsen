@@ -6,9 +6,10 @@ stages = [
     '5_train',
     '6_test',
     '7_predict',
-    '8_classify',
-    '9_compare',
-    '10_analyze'
+    '8_compute_index',
+    '9_classify',
+    '10_compare',
+    '11_analyze'
 ]
 
 frame_extraction_combinations_large = [
@@ -97,3 +98,19 @@ train = {
     "dropout": 0.8
 }
 y_scaling = 200
+rois = {
+    "cam1": {
+        "name": "dam_water_level_cam1",
+        "top": 0,
+        "left": 255,
+        "height": 125,
+        "width": 323
+    },
+    "cam5": {
+        "name": "basement_cam5",
+        "top": 113,
+        "left": 0,
+        "height": 369,
+        "width": 91
+    }
+}

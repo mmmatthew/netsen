@@ -5,6 +5,7 @@ import select_sample_images
 import image_datasets
 import train_classifier
 import segment_frames
+import compute_index
 import os
 import glob
 import evaluation_settings as s
@@ -97,8 +98,14 @@ datasets = image_datasets.create_all(
 #     for item in test_results:
 #         f.write("%s\n" % item)
 
-# Predict complete time series
-for sequence_dir in os.listdir(os.path.join(working_dir, s.stages[1])):
-    # Run segmentation
-    segment_frames.run(os.path.join(working_dir, s.stages[1], sequence_dir), working_dir)
+# # Predict complete time series
+# for sequence_dir in os.listdir(os.path.join(working_dir, s.stages[1])):
+#     # Run segmentation
+#     segment_frames.run(os.path.join(working_dir, s.stages[1], sequence_dir), working_dir)
 
+# evaluate sequence
+for images_dir in os.listdir(os.path.join(working_dir, s.stages[6])):
+    compute_index.process_images(directory=os.path.join(working_dir, s.stages[6], images_dir), working_directory=working_dir)
+
+for ts in glob.glob(os.path.join(working_dir, s.stages[7], '*.csv')):
+    compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[7]))
