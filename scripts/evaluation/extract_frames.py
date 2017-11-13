@@ -37,7 +37,7 @@ def extract_from_all(video_dir, output_dir, new_dims, sensor_data_url, offsets, 
         elif not os.path.exists(output_subdir):
             os.makedirs(output_subdir)
         # Process all videos downloaded
-        for videofile in glob.glob(os.path.join(video_dir, '*.avi')):
+        for videofile in glob.glob(os.path.join(video_dir, '*')):
             process_video(videofile, timedeltas, new_dims, output_subdir, sensor_data, offsets, step_s=1, force=force)
 
 
@@ -94,7 +94,7 @@ def load_video_time_offsets(url, sep='\t'):
     offsets = pandas.read_csv(url, sep=sep, skiprows=2)
 
     # Reformat data
-    offsets2 = pandas.melt(offsets, id_vars=['recording session '], var_name='camera')
+    offsets2 = pandas.melt(offsets, id_vars=['recording session'], var_name='camera')
     return offsets2
 
 
@@ -134,7 +134,7 @@ def get_video_metadata(video_filepath, offsets=None):
     session = info[-1]
     camera = info[1]
     if offsets is not None:
-        offset = offsets[(offsets['camera'] == camera+' ') & (offsets['recording session '] == session)].iloc[0]['value']
+        offset = offsets[(offsets['camera'] == camera) & (offsets['recording session'] == session)].iloc[0]['value']
         if offset[0] == '-':
             isnegative = True
             offset = offset[1:]

@@ -111,7 +111,7 @@ network = {
     "classes": 3,
     "layers": 4,
     "features_root": 16,
-    "class_weights": [1, 1, 2]
+    "class_weights": [1, 1, 1]
 }
 train = {
     "optimizer": "adam",

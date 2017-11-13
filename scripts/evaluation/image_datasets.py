@@ -44,6 +44,29 @@ def create_all(working_dir, augment=False, augment_duration=0, reduce_train=0.0,
                                        label_pattern=label_pattern, image_pattern=image_pattern))
     return datasets
 
+
+def create_combinations(c1, c2, working_dir):
+    """Create merged datasets for select cameras c1 and c2, e.g. cam1 and cam5"""
+    datasets = pandas.DataFrame(dict(dir=os.listdir(os.path.join(working_dir, s.stages[3]))))
+    #divide into parts
+    datasets['camera'] = [d.split('_', 1)[0] for d in datasets.dir]
+    datasets['rest'] = [d.split('_', 1)[1] for d in datasets.dir]
+
+    c1 = datasets.loc[datasets.camera == c1, :]
+    c2 = datasets.loc[datasets.camera == c2, :]
+    merged = pandas.merge(c1, c2, on='rest', suffixes=('_1', '_2'))
+
+    # go through and create merged datasets
+    for index, row in merged.iterrows():
+        # create merged name
+        merged_name = row.camera_1 + row.camera_2 + '_' + row.rest
+        if not os.path.exists(os.path.join(working_dir, s.stages[3], merged_name)):
+            pandas.concat([
+                pandas.read_csv(os.path.join(working_dir, s.stages[3], row.dir_1)),
+                pandas.read_csv(os.path.join(working_dir, s.stages[3], row.dir_2))
+            ]).to_csv(os.path.join(working_dir, s.stages[3], merged_name))
+
+
 def create(label_dir, image_dir, output_dir, name, augment=False, augment_duration=0, frac_train=0.7, frac_test=0.3,
            frac_validate=0.0, reduce_train=0.0, label_pattern='*.png', image_pattern='*.jpg', force=False):
     # fetch list of label images

@@ -6,6 +6,8 @@ import image_datasets
 import train_classifier
 import segment_frames
 import compute_index
+import classify
+import pandas
 import os
 import glob
 import evaluation_settings as s
@@ -15,28 +17,30 @@ from datetime import datetime
 # ### Evaluation settings
 # The method is tested with video data from the floodX experiments.
 
-working_dir = 'E:/watson_eval'
-# video_archive_url = 'https://zenodo.org/record/830451/files/s3_cam1_instar_161007A.tar'
-# video_archive_urls = [
-#     'https://zenodo.org/record/830451/files/s3_cam1_instar_161007A.tar',
-#     'https://zenodo.org/record/830451/files/s6_cam5_instar_161007A.tar',
-#     'https://zenodo.org/record/1035740/files/c4_cam4_instar_161007A.tar',
-#     'https://zenodo.org/record/830451/files/c3_cam3_instar_161007A.tar',
-#     'https://zenodo.org/record/830451/files/r3_cam2_instar_161007A.tar',
-#     ]
-# sensor_data_url = 'https://zenodo.org/record/1014028/files/all_s3_h_us_maxbotix.txt'
-# sensor_data_urls = [
-#     'https://zenodo.org/record/1014028/files/all_s3_h_us_maxbotix.txt',
-#     'https://zenodo.org/record/1014028/files/all_s6_h_us_maxbotix.txt',
-#     'https://zenodo.org/record/1014028/files/all_c3_h_us_nivus.txt',
-#     'https://zenodo.org/record/1014028/files/all_c3_h_us_nivus.txt',
-#     'https://zenodo.org/record/1014028/files/all_c3_h_us_nivus.txt']
-# camera_time_offset_url = 'https://zenodo.org/record/830451/files/temporal_offsets_of%20cameras.txt'
-#
-# # ### Set up folder structure
-# setup.run(working_dir)
-#
-#
+working_dir = os.path.join('E:', 'watson_eval')
+video_archive_url = 'https://zenodo.org/record/830451/files/s3_cam1_instar_161007A.tar'
+video_archive_urls = [
+    'https://zenodo.org/record/830451/files/s3_cam1_instar_161007A.tar',
+    'https://zenodo.org/record/830451/files/s6_cam5_instar_161007A.tar',
+    'https://zenodo.org/record/1035740/files/c4_cam4_instar_161007A.tar',
+    'https://zenodo.org/record/830451/files/c3_cam3_instar_161007A.tar',
+    'https://zenodo.org/record/830451/files/r3_cam2_instar_161007A.tar',
+    'https://zenodo.org/record/1039631/files/r3_gopro1_gopro_161006A.tar'
+    ]
+sensor_data_url = 'https://zenodo.org/record/1014028/files/all_s3_h_us_maxbotix.txt'
+sensor_data_urls = [
+    'https://zenodo.org/record/1014028/files/all_s3_h_us_maxbotix.txt',
+    'https://zenodo.org/record/1014028/files/all_s6_h_us_maxbotix.txt',
+    'https://zenodo.org/record/1014028/files/all_c3_h_us_nivus.txt',
+    'https://zenodo.org/record/1014028/files/all_c3_h_us_nivus.txt',
+    'https://zenodo.org/record/1014028/files/all_c3_h_us_nivus.txt',
+    'https://zenodo.org/record/1014028/files/all_s3_h_us_maxbotix.txt']
+camera_time_offset_url = 'https://zenodo.org/record/1039631/files/temporal_offsets_of%20cameras.txt'
+
+## Set up folder structure
+setup.run(working_dir)
+
+
 # # ## Fetch videos
 # video_folders = []
 # for url in video_archive_urls:
@@ -54,17 +58,24 @@ working_dir = 'E:/watson_eval'
 #         sensor_data_urls[i], time_offset)
 #
 # # ## Select samples randomly
-# image_dirs = os.listdir(os.path.join(working_dir, s.stages[1]))
 # select_sample_images.create_all(working_dir)
+#
+# Once samples have been labeled, we can verify that there is a correlation between water level and flood index
+compute_index.process_labels(working_dir)
+for ts in glob.glob(os.path.join(working_dir, s.stages[-1], 'flood index correlation', '*.csv')):
+    compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[-1], 'flood index correlation'), is_labels=True, force=True)
 
-## create datasets
-datasets = image_datasets.create_all(
-    working_dir=working_dir)
+# # create datasets
+# datasets = image_datasets.create_all(
+#     working_dir=working_dir)
+#
+# # create combined datasets
+# image_datasets.create_combinations('cam1', 'cam5', working_dir)
 
-# do training
-# for dataset in datasets:
+# # do training
+# for dataset in glob.glob(os.path.join(working_dir, s.stages[3], '*intra*.csv')):
 #     train_classifier.train(dataset, working_dir)
-
+#
 # # do testing (INTRA-event performance)
 # for model_dir in os.listdir(os.path.join(working_dir, s.stages[4])):
 #     dataset = model_dir.split(sep='__')[0] + '.csv'
@@ -87,25 +98,36 @@ datasets = image_datasets.create_all(
 #             model_dir=os.path.join(working_dir, s.stages[4], model_dir),
 #             working_dir=working_dir, dataset_csv=dataset, force=False
 #         )
-# test_results = []
-# for prediction_dir in os.listdir(os.path.join(working_dir, s.stages[5])):
+# predictions = os.listdir(os.path.join(working_dir, s.stages[5]))
+# test_results = {'run': [], 'flooding': [], 'all_classes': []}
+#
+# for prediction_dir in predictions:
 #     if os.path.isdir(os.path.join(working_dir, s.stages[5], prediction_dir)):
 #         dataset_path = os.path.join(working_dir, s.stages[3], prediction_dir.split('__D')[1] + '.csv')
-#         iou = test_classifier.computeIou(dataset_path, os.path.join(working_dir, s.stages[5], prediction_dir), channel=2)
-#         test_results.append(prediction_dir + " " + str(iou))
+#         all_classes, flooding = test_classifier.computeIou(dataset_path, os.path.join(working_dir, s.stages[5], prediction_dir), channel=2)
+#         test_results['flooding'].append(flooding)
+#         test_results['all_classes'].append(all_classes)
+#         test_results['run'].append(prediction_dir)
 #
-# with open(os.path.join(working_dir, s.stages[5], 'test_results_' + datetime.now().strftime('%Y-%m-%d %H%M%S') + '.txt'), 'w') as f:
-#     for item in test_results:
-#         f.write("%s\n" % item)
+# # write to file
+# test_results['num_frames'] = [sum([float(tr) > 0 for tr in st.split('_')[2:5]]) + 1 for st in test_results['run']]
+# test_results['mode'] = [st.split('_')[9] for st in test_results['run']]
+# result_file = os.path.join(working_dir, s.stages[5], 'test_results_' + datetime.now().strftime('%Y-%m-%d %H%M%S') + '.txt')
+# pandas.DataFrame(test_results).to_csv(result_file)
 
 # # Predict complete time series
 # for sequence_dir in os.listdir(os.path.join(working_dir, s.stages[1])):
 #     # Run segmentation
 #     segment_frames.run(os.path.join(working_dir, s.stages[1], sequence_dir), working_dir)
+#
+# # evaluate sequence
+# for images_dir in os.listdir(os.path.join(working_dir, s.stages[6])):
+#     compute_index.process_images(directory=os.path.join(working_dir, s.stages[6], images_dir), working_directory=working_dir)
+#
+# for ts in glob.glob(os.path.join(working_dir, s.stages[7], '*.csv')):
+#     compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[7]), force=False)
+#
+# # Classify into trends
+# # classify.process_all(working_dir)
 
-# evaluate sequence
-for images_dir in os.listdir(os.path.join(working_dir, s.stages[6])):
-    compute_index.process_images(directory=os.path.join(working_dir, s.stages[6], images_dir), working_directory=working_dir)
-
-for ts in glob.glob(os.path.join(working_dir, s.stages[7], '*.csv')):
-    compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[7]))
+# Analysis of results

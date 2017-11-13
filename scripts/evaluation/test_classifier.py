@@ -62,23 +62,25 @@ def computeIou(dataset, prediction_dir, roles=['test'], channel=None):
     # prediction is smaller than truth due to scaling, so crop truth to fit
     img_rows = y_pred_batch.shape[1]
     img_cols = y_pred_batch.shape[2]
-    return np.mean(np.asarray([pixel_accuracy(y_pred_batch[i], y_true_one_hot_cropped[i], img_rows, img_cols, channel) for i in range(len(y_true_batch))]))
-
+    result = np.asarray([pixel_accuracy(y_pred_batch[i], y_true_one_hot_cropped[i], img_rows, img_cols, channel) for i in range(len(y_true_batch))])
+    result_no_nan = ~np.isnan(result)
+    return np.mean(result[result_no_nan[:, 0], 0]), np.mean(result[result_no_nan[:, 1], 1])
 
 
 def pixel_accuracy(y_pred, y_true, img_rows, img_cols, channel=None):
-    # if channel is not None:
-    #     y_pred = y_pred[..., channel] > 0.8
-    #     y_true = y_true[..., channel] > 0.8
-    #     union = (y_pred or y_true) and (not y_pred or not y_true)
-    #     intersection = (y_pred and y_true) and ()
-    #     return 1.0*np.sum(intersection)/np.sum(union)
-    # else:
+    if channel is not None:
+        y_pred2 = y_pred[..., channel] > 0.8
+        y_true2 = y_true[..., channel] > 0.8
+        union = sum(y_pred2 | y_true2)
+        intersection = sum(y_pred2 & y_true2)
+        single_iou = 1.0*np.sum(intersection)/np.sum(union)
+
     y_pred = np.argmax(np.reshape(y_pred, [s.network['classes'], img_rows, img_cols]), axis=0)
     y_true = np.argmax(np.reshape(y_true, [s.network['classes'], img_rows, img_cols]), axis=0)
     y_pred = y_pred * (y_true > 0)
-    return 1.0 * np.sum((y_pred == y_true) * (y_true > 0)) / np.sum(y_true > 0)
+    overall_iou = 1.0 * np.sum((y_pred == y_true) * (y_true > 0)) / np.sum(y_true > 0)
 
+    return overall_iou, single_iou
 
 def crop_truth(truth, pred):
     # The first and second dimensions need to be cropped
