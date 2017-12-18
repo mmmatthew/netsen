@@ -121,6 +121,45 @@ train = {
     "display_step": 50,
     "dropout": 0.8
 }
+
+prediction_combinations = [
+    {
+        "data": "cam1_0_0.2_0.4",
+        "model": "cam1_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "cam2_0_0.2_0.4",
+        "model": "cam1_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "cam3_0_0.2_0.4",
+        "model": "cam1_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "cam4_0_0.2_0.4",
+        "model": "cam1_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "cam5_0_0.2_0.4",
+        "model": "cam1_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "gopro1_0_0.2_0.4",
+        "model": "cam1_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "cam1_0_0.2_0.4",
+        "model": "cam1cam5_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "cam5_0_0.2_0.4",
+        "model": "cam1cam5_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+    {
+        "data": "gopro1_0_0.2_0.4",
+        "model": "cam1cam5_intra_0_0.2_0.4__ly4ftr16w2__"
+    },
+]
 y_scaling = 200
 rois = {
     "cam1": {

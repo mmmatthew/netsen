@@ -6,11 +6,16 @@ from tf_unet import unet
 import glob
 
 
-def run(sequence_dir, working_dir, force=False):
+def run(sequence_dir, working_dir, force=False, model_dir=None):
     multitime = os.path.basename(sequence_dir).split('_', maxsplit=1)[1]
     camera = os.path.basename(sequence_dir).split('_', maxsplit=1)[0]
-    # Get appropriate model, has to have same camera and multitime
-    model_dirs = glob.glob(os.path.join(working_dir, s.stages[4], 'cam1_intra_' + multitime + '*'))
+    # If no model is provided, find one
+    if model_dir is None:
+        # Get appropriate model, has to have same camera and multitime
+        model_dirs = glob.glob(os.path.join(working_dir, s.stages[4], 'cam1_intra_' + multitime + '*'))
+    else:
+        model_dirs = [model_dir]
+
     for model_dir in model_dirs:
         # Create output dir
         output_dir = os.path.join(working_dir, s.stages[6], os.path.basename(model_dir) + os.path.basename(sequence_dir))

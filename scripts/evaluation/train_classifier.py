@@ -11,7 +11,7 @@ def train(dataset_csv, working_dir, appendum='', force=False):
     foldername = os.path.join(
         working_dir, s.stages[4], '__'.join([
             os.path.splitext(os.path.basename(dataset_csv))[0],
-            'ly' + str(s.network['layers']) + 'ftr' + str(s.network['features_root']), appendum
+            'ly' + str(s.network['layers']) + 'ftr' + str(s.network['features_root']) + appendum, ''
             ]))
 
     # only retrain if necessary

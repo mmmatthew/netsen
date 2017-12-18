@@ -60,10 +60,10 @@ setup.run(working_dir)
 # # ## Select samples randomly
 # select_sample_images.create_all(working_dir)
 #
-# Once samples have been labeled, we can verify that there is a correlation between water level and flood index
-compute_index.process_labels(working_dir)
-for ts in glob.glob(os.path.join(working_dir, s.stages[-1], 'flood index correlation', '*.csv')):
-    compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[-1], 'flood index correlation'), is_labels=True, force=True)
+# # Once samples have been labeled, we can verify that there is a correlation between water level and flood index
+# compute_index.process_labels(working_dir)
+# for ts in glob.glob(os.path.join(working_dir, s.stages[-1], 'flood index correlation', '*.csv')):
+#     compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[-1], 'flood index correlation'), is_labels=True, force=True)
 
 # # create datasets
 # datasets = image_datasets.create_all(
@@ -71,10 +71,10 @@ for ts in glob.glob(os.path.join(working_dir, s.stages[-1], 'flood index correla
 #
 # # create combined datasets
 # image_datasets.create_combinations('cam1', 'cam5', working_dir)
-
+#
 # # do training
 # for dataset in glob.glob(os.path.join(working_dir, s.stages[3], '*intra*.csv')):
-#     train_classifier.train(dataset, working_dir)
+#     train_classifier.train(dataset, working_dir, appendum='w2')
 #
 # # do testing (INTRA-event performance)
 # for model_dir in os.listdir(os.path.join(working_dir, s.stages[4])):
@@ -115,18 +115,20 @@ for ts in glob.glob(os.path.join(working_dir, s.stages[-1], 'flood index correla
 # result_file = os.path.join(working_dir, s.stages[5], 'test_results_' + datetime.now().strftime('%Y-%m-%d %H%M%S') + '.txt')
 # pandas.DataFrame(test_results).to_csv(result_file)
 
-# # Predict complete time series
-# for sequence_dir in os.listdir(os.path.join(working_dir, s.stages[1])):
-#     # Run segmentation
-#     segment_frames.run(os.path.join(working_dir, s.stages[1], sequence_dir), working_dir)
-#
-# # evaluate sequence
-# for images_dir in os.listdir(os.path.join(working_dir, s.stages[6])):
-#     compute_index.process_images(directory=os.path.join(working_dir, s.stages[6], images_dir), working_directory=working_dir)
-#
-# for ts in glob.glob(os.path.join(working_dir, s.stages[7], '*.csv')):
-#     compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[7]), force=False)
-#
+# Predict complete time series
+for comb in s.prediction_combinations:
+    # Run segmentation
+    segment_frames.run(sequence_dir=os.path.join(working_dir, s.stages[1], comb['data']),
+                       working_dir=working_dir,
+                       model_dir=os.path.join(working_dir, s.stages[4], comb['model']))
+
+# evaluate sequence
+for images_dir in os.listdir(os.path.join(working_dir, s.stages[6])):
+    compute_index.process_images(directory=os.path.join(working_dir, s.stages[6], images_dir), working_directory=working_dir)
+
+for ts in glob.glob(os.path.join(working_dir, s.stages[7], '*.csv')):
+    compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[7]), force=False)
+
 # # Classify into trends
 # # classify.process_all(working_dir)
 
