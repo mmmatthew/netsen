@@ -50,9 +50,11 @@ def create(image_dir, output_dir, camera, sample_settings, image_pattern='*.jpg'
     :return: Path to images and labels
     """
     # set up structure
+    # images_path is where the selected images are stored
     dir_name = camera + '_' + sample_settings['name']
     images_path, labels_path = directory_struct(output_dir, dir_name, force)
 
+    # pre-existing images in the output folder "image_dir"
     image_list = glob.glob(os.path.join(image_dir, image_pattern))
 
     # check if there are already files in the folders
@@ -69,12 +71,13 @@ def create(image_dir, output_dir, camera, sample_settings, image_pattern='*.jpg'
                 except Exception as e:
                     print(e)
 
-        # only select images within date
+        # only select images within date range specified for selecting frames
         filtered_list = filter_by_date(
             image_list,
             sample_settings['start'],
             sample_settings['end'])
 
+        # images with flooding are more informative for training. give them extra weight for random selection
         weights = get_weights(filtered_list, sample_settings['encourage_flooded'])
 
         rand_selection = np.random.choice(a=filtered_list, size=sample_settings['count'], p=weights)
@@ -83,13 +86,14 @@ def create(image_dir, output_dir, camera, sample_settings, image_pattern='*.jpg'
         # with open(os.path.join(output_dir, dir_name+'.txt'), 'w') as file:
         #     file.writelines(["%s\n" % item for item in rand_selection])
 
-        # copy files
+        # copy files into output directory
         for path in rand_selection:
             shutil.copy(path, images_path)
     return images_path, labels_path
 
-def directory_struct(directory, name, force):
 
+def directory_struct(directory, name, force):
+    # create dire
     subdirs = [
         'images',
         'labels'

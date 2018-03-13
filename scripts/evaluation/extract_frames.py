@@ -11,41 +11,44 @@ import evaluation_settings as s
 
 
 def extract_from_all(video_dir, output_dir, new_dims, sensor_data_url, offsets, force=False):
+    # This function executes multitemporal image extraction with different time steps ('timedeltas') between video frames
+    # to limit the number of calculations performed, we test more timedelta combinations for camera 1 alone
 
-    # Get sensor data
+    # Get sensor data to append to image file names
     sensor_data = load_sensor_data(sensor_data_url)
 
-    # Depending on the camera, we either do many or few combinations
+    # Depending on the camera, we either do many or few timedelta combinations
     if 'cam1' in video_dir:
-        # use all combinations
+        # use all combinations for the main camera
         combinations = s.frame_extraction_combinations_large
     else:
         combinations = s.frame_extraction_combinations_small
 
     # Extracts frames from all videos for a given camera, for all different timedeltas
     for timedeltas in combinations:
-        # create multitime string
+        # create multitime string for filename
         multitime = '_'.join(str(x) for x in timedeltas)
         # get camera from directory
         camera = os.path.basename(video_dir).split('_')[1]
         # subdir for saving the frames
         output_subdir = os.path.join(output_dir, camera + '_' + multitime)
 
-        # Check that output dir exists and skip if so
+        # Check that output dir exists. If so, we assume the images were already extracted and skip to the next timedelta
         if os.path.exists(output_subdir) and not force:
             continue
+        # Otherwise, create the folder
         elif not os.path.exists(output_subdir):
             os.makedirs(output_subdir)
-        # Process all videos downloaded
+        # Process all videos downloaded: extract images with current timedelta
         for videofile in glob.glob(os.path.join(video_dir, '*')):
             process_video(videofile, timedeltas, new_dims, output_subdir, sensor_data, offsets, step_s=1, force=force)
 
 
 def process_video(videofilepath, timedeltas, new_dims, output_subdir, sensor_data=None, offsets=None, step_s=1, force=False):
-    # create multitime string
+    # create multitime string (again)
     multitime = '_'.join(str(x) for x in timedeltas)
 
-    # goes through video and saves a frame every step_s seconds.
+    # create the time step. A frame will be saved every step_s seconds.
     time_step = datetime.timedelta(seconds=step_s)
 
     # Get video metadata
@@ -63,10 +66,9 @@ def process_video(videofilepath, timedeltas, new_dims, output_subdir, sensor_dat
 
         level = int(sensor_data.loc[moment]['value'])
         name_image = camera + '_' + multitime + '_' + moment.strftime('%y%m%d_%H%M%S_') + "{:.0f}".format(level) + '.jpg'
-
-
-        # save image
         image_path = os.path.join(output_subdir, name_image)
+
+        # extract and save image
         save_frame(path=image_path, vidcap=vid_capture, vid_time_ms=video_ms, delays=timedeltas, new_dims=new_dims)
 
         # increment time
