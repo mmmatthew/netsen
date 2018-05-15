@@ -40,52 +40,54 @@ camera_time_offset_url = 'https://zenodo.org/record/1039631/files/temporal_offse
 ## Set up folder structure
 setup.run(working_dir)
 
-
-# ## Fetch videos from repositories (only downloaded if necessary)
-video_folders = []
-for url in video_archive_urls:
-    video_folders.append(fetch_videos.sync(os.path.join(working_dir, s.stages[0]), url))
-
-# Get information about temporal  offset of videos, so they can be compared to sensor data
-time_offset = extract_frames.load_video_time_offsets(camera_time_offset_url)
-
-# ## Extract video frames into multiframe images
-for i in range(len(video_archive_urls)):
-    extract_frames.extract_from_all(
-        video_folders[i], os.path.join(working_dir, s.stages[1]),
-        s.frame_extraction_new_dim,
-        sensor_data_urls[i], time_offset)
-
-# ## Select samples randomly for labelling
-select_sample_images.create_all(working_dir)
-
-# Once samples have been labeled, we can verify that there is a correlation between water level and flood index
-compute_index.process_labels(working_dir)
-for ts in glob.glob(os.path.join(working_dir, s.stages[-1], 'flood index correlation', '*.csv')):
-    compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[-1], 'flood index correlation'), is_labels=True, force=True)
-
-# create training and testing datasets for convolutional neural network
-datasets = image_datasets.create_all(
-    working_dir=working_dir)
-
-# create combined datasets for training cnn with two cameras (semi-generalized)
-image_datasets.create_combinations('cam1', 'cam5', working_dir)
-
-# do training with each dataset, only using image files labeled for testing
-for dataset in glob.glob(os.path.join(working_dir, s.stages[3], '*intra*.csv')):
-    train_classifier.train(dataset, working_dir, appendum='w2')
-
-# do testing (INTRA-event performance)
-for model_dir in os.listdir(os.path.join(working_dir, s.stages[4])):
-    dataset = model_dir.split(sep='__')[0] + '.csv'
-    test_classifier.test(
-        model_dir=os.path.join(working_dir, s.stages[4], model_dir),
-        working_dir=working_dir, dataset_csv=os.path.join(working_dir, s.stages[3], dataset), force=False
-    )
-for prediction_dir in os.listdir(os.path.join(working_dir, s.stages[5])):
-    dataset_path = os.path.join(working_dir, s.stages[3], prediction_dir.split('__')[0] + '.csv')
-    iou = test_classifier.computeIou(dataset_path, os.path.join(working_dir, s.stages[5], prediction_dir))
-    print(prediction_dir, iou)
+#
+# # ## Fetch videos from repositories (only downloaded if necessary)
+# video_folders = []
+# for url in video_archive_urls:
+#     video_folders.append(fetch_videos.sync(os.path.join(working_dir, s.stages[0]), url))
+#
+# # Get information about temporal  offset of videos, so they can be compared to sensor data
+# time_offset = extract_frames.load_video_time_offsets(camera_time_offset_url)
+#
+# # ## Extract video frames into multiframe images
+# for i in range(len(video_archive_urls)):
+#     extract_frames.extract_from_all(
+#         video_folders[i], os.path.join(working_dir, s.stages[1]),
+#         s.frame_extraction_new_dim,
+#         sensor_data_urls[i], time_offset)
+#
+# # ## Select samples randomly for labelling
+# select_sample_images.create_all(working_dir)
+#
+# # Once samples have been labeled, we can verify that there is a correlation between water level and flood index
+# compute_index.process_labels(working_dir)
+# for ts in glob.glob(os.path.join(working_dir, s.stages[-1], 'flood index correlation', '*.csv')):
+#     compute_index.plot_from_csv(ts, os.path.join(working_dir, s.stages[-1], 'flood index correlation'), is_labels=True, force=True)
+#
+# # create training and testing datasets for convolutional neural network
+# datasets = image_datasets.create_all(
+#     working_dir=working_dir)
+#
+# # create combined datasets for training cnn with two cameras (semi-generalized)
+# image_datasets.create_combinations('cam1', 'cam5', working_dir)
+#
+# # do training with each dataset, only using image files labeled for testing
+# for dataset in glob.glob(os.path.join(working_dir, s.stages[3], '*intra*.csv')):
+#     train_classifier.train(dataset, working_dir, appendum='w2')
+#
+# # do testing (INTRA-event performance)
+# for model_dir in os.listdir(os.path.join(working_dir, s.stages[4])):
+#     dataset = model_dir.split(sep='__')[0] + '.csv'
+#     test_classifier.test(
+#         model_dir=os.path.join(working_dir, s.stages[4], model_dir),
+#         working_dir=working_dir, dataset_csv=os.path.join(working_dir, s.stages[3], dataset), force=False
+#     )
+for test_result_dir in os.listdir(os.path.join(working_dir, s.stages[5])):
+    # For each segmentation result folder, find corresponding dataset name
+    dataset_path = os.path.join(working_dir, s.stages[3], test_result_dir.split('__D')[1] + '.csv')
+    # compute IoU by comparing the ground truth to the test results
+    ious = test_classifier.computeIou(dataset_path, os.path.join(working_dir, s.stages[5], test_result_dir), channel=2)
+    print(test_result_dir, ious[0])
 
 # do testing (INTER-event performance)
 for model_dir in os.listdir(os.path.join(working_dir, s.stages[4])):

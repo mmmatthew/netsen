@@ -45,42 +45,50 @@ def test(model_dir, dataset_csv, working_dir, force=False):
 
 
 def computeIou(dataset, prediction_dir, roles=['test'], channel=None):
+    # compute IoU for whole image and for ROI
     data = pandas.read_csv(dataset)
-    # filter to roles
+    # filter to roles (train/test)
     data = data.loc[data['role'].isin(roles), :]
     # get prediction paths
     y_pred_paths = pandas.DataFrame(dict(pred_path=glob(prediction_dir + '/*')))
     y_pred_paths['time'] = ['_'.join(os.path.basename(os.path.splitext(p)[0]).split('_')[-3:-1]) for p in y_pred_paths['pred_path']]
     # match two together
     paths = pandas.merge(data, y_pred_paths, how='inner', on='time')
-    # extract paths
+    # extract all image data
     y_pred_batch = np.array([np.array(Image.open(path), dtype=np.float32) for path in paths.loc[:, 'pred_path']])/s.y_scaling
     y_true_batch = np.array([np.array(Image.open(path), dtype=np.float32) for path in paths.loc[:, 'label_path']])
-    # Encode the label into one-hot
+    # Encode the label into one-hot format (e.g. 0,0,1 instead of 2, or 1,0,0 instead of 0)
     y_true_one_hot = (np.arange(s.network['classes']) == y_true_batch[:, :, :, None]).astype(int)
-    y_true_one_hot_cropped = crop_truth(y_true_one_hot, y_pred_batch)
-    # prediction is smaller than truth due to scaling, so crop truth to fit
-    img_rows = y_pred_batch.shape[1]
-    img_cols = y_pred_batch.shape[2]
-    result = np.asarray([pixel_accuracy(y_pred_batch[i], y_true_one_hot_cropped[i], img_rows, img_cols, channel) for i in range(len(y_true_batch))])
-    result_no_nan = ~np.isnan(result)
-    return np.mean(result[result_no_nan[:, 0], 0]), np.mean(result[result_no_nan[:, 1], 1])
+    # prediction is smaller than truth due to scaling, so crop truth to fit. Also return crop margins
+    y_true_one_hot_cropped, top_margin, left_margin = crop_truth(y_true_one_hot, y_pred_batch)
+
+    # find out which cam each image comes from
+    cam_sources = [os.path.basename(path).split('_')[0] for path in paths.loc[:, 'label_path']]
+
+    # compute pixelwise accuracy image by image and turn into array
+    result_overall = np.asarray([pixel_accuracy(
+        y_pred_batch[i],
+        y_true_one_hot_cropped[i],
+        channel,
+        cam_sources[i], left_margin, top_margin
+    ) for i in range(len(y_true_batch))])
+    # find where there are no nans
+    result_no_nan = ~np.isnan(result_overall)
+    # return mean pixelwise accuracy for pixels that are not nan
+    return np.mean(result_overall[result_no_nan[:, 0], 0]), np.mean(result_overall[result_no_nan[:, 1], 1])
 
 
-def pixel_accuracy(y_pred, y_true, img_rows, img_cols, channel=None):
-    if channel is not None:
-        y_pred2 = y_pred[..., channel] > 0.8
-        y_true2 = y_true[..., channel] > 0.8
-        union = sum(y_pred2 | y_true2)
-        intersection = sum(y_pred2 & y_true2)
-        single_iou = 1.0*np.sum(intersection)/np.sum(union)
+def pixel_accuracy(y_pred, y_true, channel=0, camera_name='cam1', left_margin=0, top_margin=0):
+    confusion = np.tensordot(y_pred, y_true, axes=([0, 1], [0, 1]))
+    roi = s.rois[camera_name]
+    confusion_roi = np.tensordot(
+        y_pred[roi['top']-1+top_margin: roi['top'] + roi['height'], roi['left']-1+left_margin: roi['left'] + roi['width'], :],
+        y_true[roi['top']-1+top_margin: roi['top'] + roi['height'], roi['left']-1+left_margin: roi['left'] + roi['width'], :],
+        axes=([0, 1], [0, 1]))
+    iou = confusion[channel, channel] / (np.sum(confusion[channel, :]) + np.sum(confusion[channel, :]))
+    iou_roi = confusion_roi[channel, channel] / (np.sum(confusion_roi[channel, :]) + np.sum(confusion_roi[channel, :]))
+    return iou, iou_roi
 
-    y_pred = np.argmax(np.reshape(y_pred, [s.network['classes'], img_rows, img_cols]), axis=0)
-    y_true = np.argmax(np.reshape(y_true, [s.network['classes'], img_rows, img_cols]), axis=0)
-    y_pred = y_pred * (y_true > 0)
-    overall_iou = 1.0 * np.sum((y_pred == y_true) * (y_true > 0)) / np.sum(y_true > 0)
-
-    return overall_iou, single_iou
 
 def crop_truth(truth, pred):
     # The first and second dimensions need to be cropped
@@ -88,4 +96,4 @@ def crop_truth(truth, pred):
     p_shape = pred.shape
     y_dif = t_shape[1] - p_shape[1]
     x_dif = t_shape[2] - p_shape[2]
-    return truth[:, int(y_dif/2):int((y_dif/2 + p_shape[1])), int(x_dif/2):int(x_dif/2 + p_shape[2]), :]
+    return truth[:, int(y_dif/2):int((y_dif/2 + p_shape[1])), int(x_dif/2):int(x_dif/2 + p_shape[2]), :], int(y_dif/2), int(x_dif/2)
