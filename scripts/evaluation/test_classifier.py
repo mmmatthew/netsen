@@ -82,8 +82,10 @@ def pixel_accuracy(y_pred, y_true, channel=0, camera_name='cam1', left_margin=0,
     confusion = np.tensordot(y_pred, y_true, axes=([0, 1], [0, 1]))
     roi = s.rois[camera_name]
     confusion_roi = np.tensordot(
-        y_pred[roi['top']-1+top_margin: roi['top'] + roi['height'], roi['left']-1+left_margin: roi['left'] + roi['width'], :],
-        y_true[roi['top']-1+top_margin: roi['top'] + roi['height'], roi['left']-1+left_margin: roi['left'] + roi['width'], :],
+        y_pred[roi['top'] - top_margin: roi['top'] - top_margin + roi['height'],
+        roi['left'] - left_margin: roi['left'] + - left_margin + roi['width'], :],
+        y_pred[roi['top'] - top_margin: roi['top'] - top_margin + roi['height'],
+        roi['left'] - left_margin: roi['left'] + - left_margin + roi['width'], :],
         axes=([0, 1], [0, 1]))
     iou = confusion[channel, channel] / (np.sum(confusion[channel, :]) + np.sum(confusion[channel, :]))
     iou_roi = confusion_roi[channel, channel] / (np.sum(confusion_roi[channel, :]) + np.sum(confusion_roi[channel, :]))
