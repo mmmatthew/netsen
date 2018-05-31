@@ -82,39 +82,40 @@ setup.run(working_dir)
 #         model_dir=os.path.join(working_dir, s.stages[4], model_dir),
 #         working_dir=working_dir, dataset_csv=os.path.join(working_dir, s.stages[3], dataset), force=False
 #     )
-for test_result_dir in os.listdir(os.path.join(working_dir, s.stages[5])):
-    # For each segmentation result folder, find corresponding dataset name
-    dataset_path = os.path.join(working_dir, s.stages[3], test_result_dir.split('__D')[1] + '.csv')
-    # compute IoU by comparing the ground truth to the test results
-    ious = test_classifier.computeIou(dataset_path, os.path.join(working_dir, s.stages[5], test_result_dir), channel=2)
-    print(test_result_dir, ious[0])
+# for test_result_dir in os.listdir(os.path.join(working_dir, s.stages[5])):
+#     # For each segmentation result folder, find corresponding dataset name
+#     dataset_path = os.path.join(working_dir, s.stages[3], test_result_dir.split('__D')[1] + '.csv')
+#     # compute IoU by comparing the ground truth to the test results
+#     ious = test_classifier.computeIou(dataset_path, os.path.join(working_dir, s.stages[5], test_result_dir), channel=2)
+#     print(test_result_dir, ':.2f'.format(ious[0]), ':.2f'.format(ious[1]))
 
-# do testing (INTER-event performance)
-for model_dir in os.listdir(os.path.join(working_dir, s.stages[4])):
-    # get multitime
-    multitime = model_dir.split(sep='__')[0].split('_', maxsplit=2)[-1]
-    datasets = glob.glob(os.path.join(working_dir, s.stages[3], '*' + multitime + '.csv'))
-    for dataset in datasets:
-        test_classifier.test(
-            model_dir=os.path.join(working_dir, s.stages[4], model_dir),
-            working_dir=working_dir, dataset_csv=dataset, force=False
-        )
-predictions = os.listdir(os.path.join(working_dir, s.stages[5]))
-test_results = {'run': [], 'flooding': [], 'all_classes': []}
+# # do testing (INTER-event performance)
+# for model_dir in os.listdir(os.path.join(working_dir, s.stages[4])):
+#     # get multitime
+#     multitime = model_dir.split(sep='__')[0].split('_', maxsplit=2)[-1]
+#     datasets = glob.glob(os.path.join(working_dir, s.stages[3], '*' + multitime + '.csv'))
+#     for dataset in datasets:
+#         test_classifier.test(
+#             model_dir=os.path.join(working_dir, s.stages[4], model_dir),
+#             working_dir=working_dir, dataset_csv=dataset, force=False
+#         )
+predictions = os.listdir(os.path.join(working_dir, s.stages[5])) # ['Mcam1_intra_0_0.1_0.2__ly4ftr16__Dcam1_intra_0_0.1_0.2'] #
+test_results = {'run': [], 'whole_image': [], 'roi': []}
 
 # Evaluate the predictions for the test data: compare segmentation to manual label
 for prediction_dir in predictions:
     if os.path.isdir(os.path.join(working_dir, s.stages[5], prediction_dir)):
+        # fetch corresponding dataset
         dataset_path = os.path.join(working_dir, s.stages[3], prediction_dir.split('__D')[1] + '.csv')
-        all_classes, flooding = test_classifier.computeIou(dataset_path, os.path.join(working_dir, s.stages[5], prediction_dir), channel=2)
-        test_results['flooding'].append(flooding)
-        test_results['all_classes'].append(all_classes)
+        iou, iou_roi = test_classifier.computeIou_all(dataset_path, os.path.join(working_dir, s.stages[5], prediction_dir), channel=2)
+        test_results['whole_image'].append(iou)
+        test_results['roi'].append(iou_roi)
         test_results['run'].append(prediction_dir)
 
 # write results to file
 test_results['num_frames'] = [sum([float(tr) > 0 for tr in st.split('_')[2:5]]) + 1 for st in test_results['run']]
 test_results['mode'] = [st.split('_')[9] for st in test_results['run']]
-result_file = os.path.join(working_dir, s.stages[5], 'test_results_' + datetime.now().strftime('%Y-%m-%d %H%M%S') + '.txt')
+result_file = os.path.join(working_dir, s.stages[5], 'test_results_' + datetime.now().strftime('%Y-%m-%d %H%M%S') + '.csv')
 pandas.DataFrame(test_results).to_csv(result_file)
 
 # For all video segments, do segmentation for all multitemporal images

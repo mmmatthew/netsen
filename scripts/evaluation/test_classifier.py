@@ -12,10 +12,10 @@ import pandas
 
 
 def test(model_dir, dataset_csv, working_dir, force=False):
-
     # create folder name
     output_dir = os.path.join(working_dir, s.stages[5],
-                              'M'+os.path.basename(model_dir)+'D'+os.path.splitext(os.path.basename(dataset_csv))[0])
+                              'M' + os.path.basename(model_dir) + 'D' + os.path.splitext(os.path.basename(dataset_csv))[
+                                  0])
 
     # only retest if necessary
     if not os.path.exists(output_dir) or force:
@@ -44,58 +44,80 @@ def test(model_dir, dataset_csv, working_dir, force=False):
         print(os.path.basename(output_dir), ' already exists. Skipping.')
 
 
-def computeIou(dataset, prediction_dir, roles=['test'], channel=None):
+def computeIou_all(dataset_path, prediction_dir, roles=['test'], channel=None):
     # compute IoU for whole image and for ROI
-    data = pandas.read_csv(dataset)
+    dataset = pandas.read_csv(dataset_path)
     # filter to roles (train/test)
-    data = data.loc[data['role'].isin(roles), :]
-    # get prediction paths
+    dataset = dataset.loc[dataset['role'].isin(roles), :]
+
+    # get paths to files of predicted flooding coverage
     y_pred_paths = pandas.DataFrame(dict(pred_path=glob(prediction_dir + '/*')))
-    y_pred_paths['time'] = ['_'.join(os.path.basename(os.path.splitext(p)[0]).split('_')[-3:-1]) for p in y_pred_paths['pred_path']]
-    # match two together
-    paths = pandas.merge(data, y_pred_paths, how='inner', on='time')
-    # extract all image data
-    y_pred_batch = np.array([np.array(Image.open(path), dtype=np.float32) for path in paths.loc[:, 'pred_path']])/s.y_scaling
-    y_true_batch = np.array([np.array(Image.open(path), dtype=np.float32) for path in paths.loc[:, 'label_path']])
-    # Encode the label into one-hot format (e.g. 0,0,1 instead of 2, or 1,0,0 instead of 0)
-    y_true_one_hot = (np.arange(s.network['classes']) == y_true_batch[:, :, :, None]).astype(int)
+    # extract time from paths
+    y_pred_paths['time'] = ['_'.join(os.path.basename(os.path.splitext(p)[0]).split('_')[-3:-1]) for p in
+                            y_pred_paths['pred_path']]
+
+    # match the predictions to the image and label paths based on the time
+    paths = pandas.merge(dataset, y_pred_paths, how='inner', on='time')
+
+    # for each image in the dataset, read image data and compute IoU
+    for index, row in paths.iterrows():
+        paths.loc[index, 'iou'], paths.loc[index, 'iou_roi'] = computeIou_single(label_path=row['label_path'], pred_path=row['pred_path'])
+
+    # write data to file
+    paths.to_csv(os.path.join(prediction_dir, 'iou.csv'))
+
+    return paths['iou'].mean(), paths['iou_roi'].mean()
+
+
+def computeIou_single(label_path, pred_path, channel=2):
+    # read image data
+    label = np.array(Image.open(label_path), dtype=np.float32)
+    pred = np.array(Image.open(pred_path), dtype=np.float32) / s.y_scaling
+
+    # Encode label into one-hot format (e.g. 0,0,1 instead of 2, or 1,0,0 instead of 0)
+    label_one_hot = (np.arange(s.network['classes']) == label[:, :, None]).astype(float)
+    # predictions are probabilistic - make the highest probability one
+    pred_one_hot = (np.arange(s.network['classes']) == (pred.argmax(axis=2))[:, :, None]).astype(float)
+
     # prediction is smaller than truth due to scaling, so crop truth to fit. Also return crop margins
-    y_true_one_hot_cropped, top_margin, left_margin = crop_truth(y_true_one_hot, y_pred_batch)
+    label_one_hot, top_margin, left_margin = crop_truth(label_one_hot, pred_one_hot)
 
-    # find out which cam each image comes from
-    cam_sources = [os.path.basename(path).split('_')[0] for path in paths.loc[:, 'label_path']]
+    # get camera name and ROI information
+    roi = s.rois[os.path.basename(pred_path).split('_')[0]]
+    left = max(roi['left'], 0)
+    top = max(roi['top'], 0)
+    right = min(roi['left'] + roi['width'], pred_one_hot.shape[1])
+    bottom = min(roi['top'] + roi['height'], pred_one_hot.shape[0])
 
-    # compute pixelwise accuracy image by image and turn into array
-    result_overall = np.asarray([pixel_accuracy(
-        y_pred_batch[i],
-        y_true_one_hot_cropped[i],
-        channel,
-        cam_sources[i], left_margin, top_margin
-    ) for i in range(len(y_true_batch))])
-    # find where there are no nans
-    result_no_nan = ~np.isnan(result_overall)
-    # return mean pixelwise accuracy for pixels that are not nan
-    return np.mean(result_overall[result_no_nan[:, 0], 0]), np.mean(result_overall[result_no_nan[:, 1], 1])
+    # crop out roi
+    pred_one_hot_roi = pred_one_hot[top: bottom, left: right, :]
+    label_one_hot_roi = label_one_hot[top: bottom, left: right, :]
 
+    # compute confusion matrix
+    confusion = np.tensordot(pred_one_hot, label_one_hot, axes=([0, 1], [0, 1]))
+    confusion_roi = np.tensordot(pred_one_hot_roi, label_one_hot_roi, axes=([0, 1], [0, 1]))
 
-def pixel_accuracy(y_pred, y_true, channel=0, camera_name='cam1', left_margin=0, top_margin=0):
-    confusion = np.tensordot(y_pred, y_true, axes=([0, 1], [0, 1]))
-    roi = s.rois[camera_name]
-    confusion_roi = np.tensordot(
-        y_pred[roi['top'] - top_margin: roi['top'] - top_margin + roi['height'],
-        roi['left'] - left_margin: roi['left'] + - left_margin + roi['width'], :],
-        y_pred[roi['top'] - top_margin: roi['top'] - top_margin + roi['height'],
-        roi['left'] - left_margin: roi['left'] + - left_margin + roi['width'], :],
-        axes=([0, 1], [0, 1]))
-    iou = confusion[channel, channel] / (np.sum(confusion[channel, :]) + np.sum(confusion[channel, :]))
-    iou_roi = confusion_roi[channel, channel] / (np.sum(confusion_roi[channel, :]) + np.sum(confusion_roi[channel, :]))
+    #compute iou union
+    union = (np.sum(confusion[channel, :]) + np.sum(confusion[:, channel])) - confusion[channel, channel]
+    union_roi = (np.sum(confusion_roi[channel, :]) + np.sum(confusion_roi[:, channel])) - confusion_roi[channel, channel]
+
+    # compute iou (return 1 if union is zero)
+    if union == 0:
+        iou = 1
+    else:
+        iou = confusion[channel, channel] / union
+    if union_roi == 0:
+        iou_roi = 1
+    else:
+        iou_roi = confusion_roi[channel, channel] / union_roi
+
     return iou, iou_roi
 
-
 def crop_truth(truth, pred):
-    # The first and second dimensions need to be cropped
+    # Crop the label to the size of the prediction
     t_shape = truth.shape
     p_shape = pred.shape
-    y_dif = t_shape[1] - p_shape[1]
-    x_dif = t_shape[2] - p_shape[2]
-    return truth[:, int(y_dif/2):int((y_dif/2 + p_shape[1])), int(x_dif/2):int(x_dif/2 + p_shape[2]), :], int(y_dif/2), int(x_dif/2)
+    y_dif = t_shape[0] - p_shape[0]
+    x_dif = t_shape[1] - p_shape[1]
+    return truth[int(y_dif / 2):int((y_dif / 2 + p_shape[0])), int(x_dif / 2):int(x_dif / 2 + p_shape[1]), :], int(
+        y_dif / 2), int(x_dif / 2)
