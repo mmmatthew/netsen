@@ -167,7 +167,7 @@ rois = {
         "top": 0,
         "left": 255,
         "height": 125,
-        "width": 323
+        "width": 293
     },
     "cam5": {
         "name": "basement_cam5",
